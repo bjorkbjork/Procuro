@@ -1,0 +1,13 @@
+*.py[codz]
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pdm-python
+
+# don't track my docs
+*.pdf
+*.odt
+
+# don't track the vm iso
+*.iso
