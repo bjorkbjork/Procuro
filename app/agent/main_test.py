@@ -1,0 +1,109 @@
+"""
+Tests for the Stage 1 integration: poll input sheet → extract specs → update status.
+All external calls (Sheets API, Browserbase) are monkeypatched.
+"""
+
+import pytest
+from unittest.mock import MagicMock, call
+from pathlib import Path
+
+from app.agent.main import process_input_sheet
+from app.db.database import SessionLocal
+from app.db.models.product import Product
+
+FIXTURE_PATH = Path(__file__).resolve().parents[2] / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+FAKE_URL_1 = "https://www.kogan.com/au/buy/test-main-1/"
+FAKE_URL_2 = "https://www.kogan.com/au/buy/test-main-2/"
+
+
+@pytest.fixture(autouse=True)
+def cleanup():
+    yield
+    with SessionLocal() as session:
+        session.query(Product).filter(
+            Product.source_url.in_([FAKE_URL_1, FAKE_URL_2])
+        ).delete()
+        session.commit()
+
+
+@pytest.fixture
+def mock_sheets(monkeypatch):
+    mock = MagicMock()
+    monkeypatch.setattr("app.agent.main.SheetsService", lambda: mock)
+    return mock
+
+
+@pytest.fixture(autouse=True)
+def mock_fetch(monkeypatch):
+    html = FIXTURE_PATH.read_text()
+    monkeypatch.setattr("app.agent.spec_extraction.fetch_page_html", lambda url: html)
+
+
+class TestProcessInputSheet:
+    def test_extracts_new_url(self, mock_sheets):
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": ""},
+        ]
+        process_input_sheet()
+
+        mock_sheets.update_input_status.assert_any_call(0, "processing")
+        mock_sheets.update_input_status.assert_any_call(0, "done")
+
+        with SessionLocal() as session:
+            product = session.query(Product).filter_by(source_url=FAKE_URL_1).first()
+            assert product is not None
+            assert product.specs is not None
+
+    def test_skips_done_url(self, mock_sheets):
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": "done"},
+        ]
+        process_input_sheet()
+        mock_sheets.update_input_status.assert_not_called()
+
+    def test_skips_processing_url(self, mock_sheets):
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": "processing"},
+        ]
+        process_input_sheet()
+        mock_sheets.update_input_status.assert_not_called()
+
+    def test_marks_existing_product_as_done(self, mock_sheets):
+        with SessionLocal() as session:
+            session.add(Product(source_url=FAKE_URL_1, title="Test", specs={}))
+            session.commit()
+
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": ""},
+        ]
+        process_input_sheet()
+        mock_sheets.update_input_status.assert_called_once_with(0, "done")
+
+    def test_marks_error_on_failure(self, mock_sheets, monkeypatch):
+        monkeypatch.setattr(
+            "app.agent.spec_extraction.fetch_page_html",
+            lambda url: (_ for _ in ()).throw(RuntimeError("captcha")),
+        )
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": ""},
+        ]
+        process_input_sheet()
+        mock_sheets.update_input_status.assert_any_call(0, "processing")
+        mock_sheets.update_input_status.assert_any_call(0, "error")
+
+    def test_processes_multiple_urls(self, mock_sheets):
+        mock_sheets.read_input_rows.return_value = [
+            {"url": FAKE_URL_1, "status": ""},
+            {"url": FAKE_URL_2, "status": ""},
+        ]
+        process_input_sheet()
+        assert mock_sheets.update_input_status.call_count == 4
+        mock_sheets.update_input_status.assert_any_call(0, "done")
+        mock_sheets.update_input_status.assert_any_call(1, "done")
+
+    def test_skips_empty_url(self, mock_sheets):
+        mock_sheets.read_input_rows.return_value = [
+            {"url": "", "status": ""},
+        ]
+        process_input_sheet()
+        mock_sheets.update_input_status.assert_not_called()
