@@ -5,6 +5,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -30,6 +31,7 @@ class SupplierThread(Base):
             f"state IN ({', '.join(repr(s) for s in VALID_STATES)})",
             name="check_state",
         ),
+        UniqueConstraint("product_id", "supplier_id", name="uq_product_supplier"),
     )
 
     id = Column(Integer, primary_key=True)
