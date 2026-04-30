@@ -39,12 +39,21 @@ class SupplierThread(Base):
     gmail_thread_id = Column(String, nullable=True)
     respond_after = Column(DateTime(timezone=True), nullable=True)
     negotiation_rounds = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     last_updated = Column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     product = relationship("Product")
     supplier = relationship("Supplier")
-    quotes = relationship("Quote", back_populates="thread", order_by="Quote.round_number")
-    messages = relationship("Message", back_populates="thread", order_by="Message.sent_at")
+    quotes = relationship(
+        "Quote", back_populates="thread", order_by="Quote.round_number"
+    )
+    messages = relationship(
+        "Message", back_populates="thread", order_by="Message.sent_at"
+    )

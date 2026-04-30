@@ -12,7 +12,9 @@ class Product(Base):
     source_url = Column(String, nullable=False, unique=True)
     title = Column(String, nullable=False)
     specs = Column(JSONB, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     @hybrid_property
     def source_slug(self) -> str:

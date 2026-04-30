@@ -13,6 +13,8 @@ class Quote(Base):
     price_usd = Column(Numeric(10, 2), nullable=False)
     moq = Column(Integer, nullable=True)
     lead_time = Column(String, nullable=True)
-    received_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    received_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     thread = relationship("SupplierThread", back_populates="quotes")

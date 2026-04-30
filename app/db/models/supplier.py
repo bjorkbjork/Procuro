@@ -17,4 +17,6 @@ class Supplier(Base):
     platform = Column(String, nullable=False)
     profile_url = Column(String, nullable=False)
     contact_address = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
