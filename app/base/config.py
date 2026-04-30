@@ -36,12 +36,20 @@ class GoogleSettings(BaseSettings):
     GOOGLE_AUTH_URI: str
     GOOGLE_TOKEN_URI: str
     GOOGLE_AUTH_PROVIDER_X509_CERT_URL: str
-    GOOGLE_REFRESH_TOKEN: str
+    GOOGLE_REFRESH_TOKEN: str = ""
 
     # the ID for the sheet containing both input/output tabs
     GOOGLE_SHEET_ID: str = "1-3f1S0ditHC70fawiS6tcw2yK7GCWacecKCGXNTl3s4"
 
 
+class BrowserbaseSettings(BaseSettings):
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    BROWSERBASE_API_KEY: str
+    BROWSERBASE_PROJECT_ID: str
+
+
 settings = Settings()
 pg_settings = PostgresSettings()
 google_settings = GoogleSettings()
+browserbase_settings = BrowserbaseSettings()
