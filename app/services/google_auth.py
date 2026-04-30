@@ -144,13 +144,6 @@ def _authenticate_via_browser() -> Credentials:
         continue_btn = page.locator('button:has-text("Continue")')
         continue_btn.wait_for(state="visible", timeout=30_000)
         _log_page_state(page, "consent_page")
-
-        checkboxes = page.locator('input[type="checkbox"]')
-        for i in range(checkboxes.count()):
-            cb = checkboxes.nth(i)
-            if cb.is_visible() and not cb.is_checked():
-                cb.check()
-
         continue_btn.click()
         page.wait_for_timeout(10_000)
         _log_page_state(page, "after_consent")
