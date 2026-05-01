@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${PG_USER:-sourcing_agent}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-sourcingAgentDb}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-kogan} -d ${DB_NAME:-sourcingAgentDb}"]
+      interval: 5s
+      retries: 5
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PG_HOST: db
+    restart: always
+
+volumes:
+  pgdata:
