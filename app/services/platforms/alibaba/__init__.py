@@ -1,8 +1,12 @@
+from playwright.sync_api import Page
+
 from app.db.models.enums import Platform as PlatformEnum
 from app.services.platforms.alibaba.service import (
+    login_alibaba,
     parse_product_specs,
     parse_product_title,
     search_suppliers,
+    send_product_inquiry,
 )
 
 
@@ -18,3 +22,9 @@ class Platform:
 
     def parse_title(self, html: str) -> str:
         return parse_product_title(html)
+
+    def login(self, page: Page) -> None:
+        login_alibaba(page)
+
+    def send_inquiry(self, page: Page, product_url: str, message: str) -> bool:
+        return send_product_inquiry(page, product_url, message)
