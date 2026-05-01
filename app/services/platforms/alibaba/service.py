@@ -5,6 +5,7 @@ Login and inquiry submission use Playwright (via Browserbase)."""
 
 import logging
 import re
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -134,6 +135,20 @@ def login_alibaba(page: Page) -> None:
     log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
 
 
+def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
+    """Wait for the AliTalk inquiry iframe to load and return its Frame."""
+    deadline = time.monotonic() + timeout / 1000
+    while time.monotonic() < deadline:
+        frame = page.frame(url=re.compile(r"message\.alibaba\.com"))
+        if frame:
+            return frame
+        page.wait_for_timeout(500)
+    raise TimeoutError("AliTalk inquiry iframe did not load")
+
+
+INQUIRY_SUCCESS = ".mcSuccess"
+
+
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
@@ -143,22 +158,24 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     page.wait_for_selector(INQUIRY_BUTTON, timeout=15_000)
     page.click(INQUIRY_BUTTON)
 
-    # The modal loads an iframe from message.alibaba.com
-    page.wait_for_selector(INQUIRY_IFRAME, timeout=10_000)
-    iframe_el = page.locator(INQUIRY_IFRAME).element_handle()
-    frame = iframe_el.content_frame()
+    frame = _get_inquiry_frame(page)
 
     frame.wait_for_selector(INQUIRY_TEXTAREA, timeout=10_000)
     frame.fill(INQUIRY_TEXTAREA, message)
 
-    # Submit button enables after text is entered
-    submit = frame.locator(INQUIRY_SUBMIT)
-    submit.wait_for(state="attached", timeout=5_000)
-    frame.wait_for_timeout(1_000)
-    submit.click()
+    frame.wait_for_selector(
+        f"{INQUIRY_SUBMIT}:not([disabled])", timeout=5_000,
+    )
+    frame.evaluate(
+        "sel => document.querySelector(sel).click()", INQUIRY_SUBMIT,
+    )
 
-    # Wait for the modal to close or a success indicator
-    page.wait_for_timeout(3_000)
+    try:
+        frame.wait_for_selector(INQUIRY_SUCCESS, timeout=10_000)
+    except Exception:
+        log.warning("No success indicator after submit for %s", product_url)
+        return False
+
     log.info("Inquiry submitted for %s", product_url)
     return True
 
