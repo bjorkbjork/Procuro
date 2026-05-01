@@ -68,6 +68,7 @@ class TestParseProductTitle:
         assert parse_product_title("<html></html>") == ""
 
 
+@pytest.mark.integration
 class TestSearchSuppliers:
     """Live test — hits the real Alibaba API."""
 

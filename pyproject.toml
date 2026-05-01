@@ -14,6 +14,10 @@ license = {text = "MIT"}
 [tool.pdm]
 distribution = false
 
+[tool.pytest.ini_options]
+markers = ["integration: hits real external services (Browserbase, Alibaba, Gmail etc.)"]
+addopts = "-m 'not integration'"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

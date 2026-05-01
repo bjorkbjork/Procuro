@@ -7,6 +7,8 @@ import pytest
 
 from app.services.browser import BrowserSession
 
+pytestmark = pytest.mark.integration
+
 
 class TestBrowserSession:
     def test_session_opens_and_navigates(self):

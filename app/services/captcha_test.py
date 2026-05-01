@@ -2,12 +2,15 @@
 
 import logging
 
+import pytest
+
 from app.services.browser import BrowserSession
 from app.services.captcha import handle_captcha
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 
+@pytest.mark.integration
 def test_captcha_escalation():
     with BrowserSession(keep_alive=True) as s:
         s.page.goto("https://accounts.hcaptcha.com/demo", wait_until="domcontentloaded")

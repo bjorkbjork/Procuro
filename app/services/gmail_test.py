@@ -7,6 +7,8 @@ import pytest
 
 from app.services.gmail import GmailService
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def gmail():
