@@ -7,11 +7,12 @@ import pytest
 from pathlib import Path
 from bs4 import BeautifulSoup
 
-from app.agent.spec_extraction import parse_title, parse_specs, extract_specs
+from app.agent.stage_one_spec_extraction import parse_title, parse_specs, extract_specs
 from app.db.database import SessionLocal
 from app.db.models.product import Product
 
-FIXTURE_PATH = Path(__file__).resolve().parents[2] / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+FIXTURES_DIR = Path(__file__).resolve().parents[2] / "html_test_fixtures"
+FIXTURE_PATH = FIXTURES_DIR / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
 TEST_URL = "https://www.kogan.com/au/buy/test-spec-extraction/"
 
 
@@ -66,7 +67,7 @@ class TestExtractSpecs:
     def test_stores_product_in_db(self, monkeypatch):
         html = FIXTURE_PATH.read_text()
         monkeypatch.setattr(
-            "app.agent.spec_extraction.fetch_page_html", lambda url: html
+            "app.agent.stage_one_spec_extraction.fetch_page_html", lambda url: html
         )
         product = extract_specs(TEST_URL)
         assert product.id is not None
@@ -77,7 +78,7 @@ class TestExtractSpecs:
     def test_updates_existing_product(self, monkeypatch):
         html = FIXTURE_PATH.read_text()
         monkeypatch.setattr(
-            "app.agent.spec_extraction.fetch_page_html", lambda url: html
+            "app.agent.stage_one_spec_extraction.fetch_page_html", lambda url: html
         )
         p1 = extract_specs(TEST_URL)
         p2 = extract_specs(TEST_URL)
