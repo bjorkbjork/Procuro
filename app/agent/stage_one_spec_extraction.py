@@ -41,14 +41,10 @@ def parse_specs(soup: BeautifulSoup) -> dict:
 
 
 def fetch_page_html(source_url: str) -> str:
-    # Retailer sites detect non-AU traffic as bot, and throw captchas
     with BrowserSession(proxy_country="AU") as s:
         s.page.goto(source_url, timeout=60_000)
         s.page.wait_for_timeout(5_000)
-        html = s.page.content()
-    if "captcha-delivery" in html:
-        raise RuntimeError(f"Blocked by captcha on {source_url}")
-    return html
+        return s.page.content()
 
 
 def extract_specs(source_url: str) -> Product:
