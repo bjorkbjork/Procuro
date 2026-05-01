@@ -19,12 +19,15 @@ CAPTCHA_WIDGET_SELECTORS = [
     "iframe[src*='challenges.cloudflare.com']",
     "#captcha",
     ".captcha",
+    "#nc_1_n1z",
 ]
 
 CAPTCHA_TEXT_MARKERS = [
     "security check is required",
     "verify you are human",
     "checking your browser",
+    "slide to verify",
+    "detected unusual traffic",
 ]
 
 AUTO_SOLVE_TIMEOUT = 30
@@ -39,12 +42,57 @@ class CaptchaSolveState:
     auto_solve_finished: bool = False
 
 
+CAPTCHA_URL_MARKERS = [
+    "_____tmd_____/punish",
+    "action=captcha",
+]
+
+
 def _detect_captcha(page: Page) -> bool:
+    url = page.url.lower()
+    if any(marker in url for marker in CAPTCHA_URL_MARKERS):
+        return True
     for selector in CAPTCHA_WIDGET_SELECTORS:
         if page.locator(selector).count() > 0:
             return True
     content = page.content().lower()
     return any(marker in content for marker in CAPTCHA_TEXT_MARKERS)
+
+
+SLIDER_HANDLE = "#nc_1_n1z"
+SLIDER_TRACK = ".nc_scale"
+SLIDER_SOLVE_RETRIES = 3
+
+
+def _try_slider_solve(page: Page) -> bool:
+    """Drag the Alibaba NoCaptcha slider from left to right."""
+    handle = page.locator(SLIDER_HANDLE)
+    track = page.locator(SLIDER_TRACK)
+    if handle.count() == 0 or track.count() == 0:
+        return False
+
+    for attempt in range(SLIDER_SOLVE_RETRIES):
+        handle_box = handle.bounding_box()
+        track_box = track.bounding_box()
+        if not handle_box or not track_box:
+            return False
+
+        start_x = handle_box["x"] + handle_box["width"] / 2
+        start_y = handle_box["y"] + handle_box["height"] / 2
+        end_x = track_box["x"] + track_box["width"] - 10
+
+        page.mouse.move(start_x, start_y)
+        page.mouse.down()
+        page.mouse.move(end_x, start_y, steps=30)
+        page.mouse.up()
+        page.wait_for_timeout(2000)
+
+        if not _detect_captcha(page):
+            log.info("Slider captcha solved on attempt %d", attempt + 1)
+            return True
+        log.info("Slider attempt %d did not clear captcha", attempt + 1)
+
+    return False
 
 
 def _attach_console_listener(page: Page, state: CaptchaSolveState) -> None:
@@ -110,6 +158,12 @@ def handle_captcha(
     """
     if not _detect_captcha(page):
         return True
+
+    if page.locator(SLIDER_HANDLE).count() > 0 and page.locator(SLIDER_TRACK).count() > 0:
+        log.info("Slider captcha detected — attempting drag solve")
+        if _try_slider_solve(page):
+            return True
+        log.warning("Slider solve failed — falling through to auto-solve")
 
     log.info("Captcha detected — waiting for Browserbase auto-solve")
     state = CaptchaSolveState(detected=True)
