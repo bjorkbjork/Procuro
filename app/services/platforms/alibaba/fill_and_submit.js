@@ -7,7 +7,6 @@
                 return resolve({ok: false, reason: "textarea_not_found"});
             }
 
-            // Set value and trigger React's onChange
             const nativeSetter = Object.getOwnPropertyDescriptor(
                 HTMLTextAreaElement.prototype, 'value'
             ).set;
@@ -15,7 +14,6 @@
             ta.dispatchEvent(new Event('input', {bubbles: true}));
             ta.dispatchEvent(new Event('change', {bubbles: true}));
 
-            // Wait for submit button to enable
             const waitBtn = (btnTries) => {
                 const btn = document.querySelector(config.submitSel);
                 if (!btn) {
@@ -27,12 +25,14 @@
                     return resolve({ok: false, reason: "submit_stayed_disabled"});
                 }
 
+                const bodyBefore = document.body.innerHTML.length;
                 btn.click();
 
-                // Wait for form to change (textarea disappears or DOM changes)
                 const checkDone = (doneTries) => {
+                    const bodyAfter = document.body.innerHTML.length;
                     const ta2 = document.querySelector(config.textareaSel);
-                    if (!ta2 || !ta2.offsetParent) return resolve({ok: true});
+                    if (!ta2 || ta2.value !== config.message || Math.abs(bodyAfter - bodyBefore) > 200)
+                        return resolve({ok: true});
                     if (doneTries > 0) return setTimeout(() => checkDone(doneTries - 1), 500);
                     resolve({ok: false, reason: "form_unchanged"});
                 };
