@@ -37,7 +37,7 @@ def mock_sheets(monkeypatch):
 @pytest.fixture(autouse=True)
 def mock_fetch(monkeypatch):
     html = FIXTURE_PATH.read_text()
-    monkeypatch.setattr("app.agent.stage_one_spec_extraction.fetch_page_html", lambda url: html)
+    monkeypatch.setattr("app.agent.stage_one_spec_extraction.fetch_page_html", lambda url, proxy_country=None: html)
 
 
 class TestProcessInputSheet:
@@ -83,7 +83,7 @@ class TestProcessInputSheet:
     def test_marks_error_on_failure(self, mock_sheets, monkeypatch):
         monkeypatch.setattr(
             "app.agent.stage_one_spec_extraction.fetch_page_html",
-            lambda url: (_ for _ in ()).throw(RuntimeError("captcha")),
+            lambda url, proxy_country=None: (_ for _ in ()).throw(RuntimeError("captcha")),
         )
         mock_sheets.read_input_rows.return_value = [
             {"url": FAKE_URL_1, "status": ""},

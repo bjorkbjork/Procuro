@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 from bs4 import BeautifulSoup
 
-from app.services.alibaba import (
+from app.services.platforms.alibaba.service import (
     parse_product_specs,
     parse_product_title,
     search_suppliers,
 )
 
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "html_test_fixtures"
+FIXTURES_DIR = Path(__file__).resolve().parents[4] / "html_test_fixtures"
 ALIBABA_FIXTURE = next(FIXTURES_DIR.glob("*Advertising Players*"))
 
 
