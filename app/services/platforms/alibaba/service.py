@@ -146,9 +146,6 @@ def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
     raise TimeoutError("AliTalk inquiry iframe did not load")
 
 
-INQUIRY_SUCCESS = ".mcSuccess"
-
-
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
@@ -171,9 +168,11 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     )
 
     try:
-        frame.wait_for_selector(INQUIRY_SUCCESS, timeout=10_000)
+        frame.wait_for_selector(
+            INQUIRY_TEXTAREA, state="hidden", timeout=10_000,
+        )
     except Exception:
-        log.warning("No success indicator after submit for %s", product_url)
+        log.warning("Form unchanged after submit for %s", product_url)
         return False
 
     log.info("Inquiry submitted for %s", product_url)
