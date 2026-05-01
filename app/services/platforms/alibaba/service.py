@@ -1,12 +1,16 @@
 """Alibaba supplier search and product page parsing. Search uses their internal
 JSON API (no browser needed). Parsing functions extract specs from product page
-HTML — the caller is responsible for fetching the HTML (via Browserbase etc.)."""
+HTML — the caller is responsible for fetching the HTML (via Browserbase etc.).
+Login and inquiry submission use Playwright (via Browserbase)."""
 
 import logging
 import re
 
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import Page
+
+from app.base.config import settings
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +101,63 @@ def search_suppliers(
         len(results), query, page,
     )
     return results
+
+
+INQUIRY_BUTTON = "[data-testid='customizationSkuSummary-INQUIRY']"
+INQUIRY_IFRAME = ".alitalk-dialog-iframe"
+INQUIRY_TEXTAREA = ".content-input"
+INQUIRY_SUBMIT = "button.next-btn-primary"
+
+
+def login_alibaba(page: Page) -> None:
+    """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
+    page.goto("https://login.alibaba.com/", wait_until="networkidle")
+
+    google_btn = page.locator("#google a")
+    google_btn.click()
+
+    # Google OAuth form — email
+    page.wait_for_selector("input[type='email']", timeout=15_000)
+    page.fill("input[type='email']", settings.GMAIL_ACCOUNT)
+    page.click("#identifierNext")
+
+    # Google OAuth form — password
+    page.wait_for_selector("input[type='password']:visible", timeout=15_000)
+    page.fill("input[type='password']", settings.GMAIL_PASSWORD)
+    page.click("#passwordNext")
+
+    # Wait for redirect back to Alibaba
+    page.wait_for_url("*alibaba.com*", timeout=30_000)
+    log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
+
+
+def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
+    """Submit an inquiry via the Alibaba product page inquiry modal.
+
+    Returns True if the inquiry was submitted successfully.
+    """
+    page.goto(product_url, timeout=60_000)
+    page.wait_for_selector(INQUIRY_BUTTON, timeout=15_000)
+    page.click(INQUIRY_BUTTON)
+
+    # The modal loads an iframe from message.alibaba.com
+    page.wait_for_selector(INQUIRY_IFRAME, timeout=10_000)
+    iframe_el = page.locator(INQUIRY_IFRAME).element_handle()
+    frame = iframe_el.content_frame()
+
+    frame.wait_for_selector(INQUIRY_TEXTAREA, timeout=10_000)
+    frame.fill(INQUIRY_TEXTAREA, message)
+
+    # Submit button enables after text is entered
+    submit = frame.locator(INQUIRY_SUBMIT)
+    submit.wait_for(state="attached", timeout=5_000)
+    frame.wait_for_timeout(1_000)
+    submit.click()
+
+    # Wait for the modal to close or a success indicator
+    page.wait_for_timeout(3_000)
+    log.info("Inquiry submitted for %s", product_url)
+    return True
 
 
 def parse_product_specs(html: str) -> dict:
