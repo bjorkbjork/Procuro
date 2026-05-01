@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # Logfire
     LOGFIRE_TOKEN: str = ""
+    MAINTAINER_EMAIL_ADDRESS: str = ""
 
 
 class PostgresSettings(BaseSettings):
