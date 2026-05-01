@@ -103,28 +103,30 @@ def send_outreach() -> int:
                 source_product = info["source_product"]
                 message = _build_message(source_product)
 
-                try:
-                    success = platform.send_inquiry(
-                        browser.page, product_url, message,
-                    )
-                except Exception as exc:
-                    log.exception(
-                        "Failed to send inquiry for thread %d (%s)",
-                        thread_id, product_url,
-                    )
-                    if "Target" in str(exc) and "closed" in str(exc):
-                        log.error("Browser session dead — aborting remaining inquiries")
-                        break
-                    continue
-
-                if not success:
-                    log.warning(
-                        "Inquiry not confirmed for thread %d (%s)",
-                        thread_id, product_url,
-                    )
-                    continue
-
                 with SessionLocal() as session:
+                    try:
+                        success = platform.send_inquiry(
+                            browser.page, product_url, message,
+                        )
+                    except Exception as exc:
+                        session.rollback()
+                        log.exception(
+                            "Failed to send inquiry for thread %d (%s)",
+                            thread_id, product_url,
+                        )
+                        if "Target" in str(exc) and "closed" in str(exc):
+                            log.error("Browser session dead — aborting remaining inquiries")
+                            break
+                        continue
+
+                    if not success:
+                        session.rollback()
+                        log.warning(
+                            "Inquiry not confirmed for thread %d (%s)",
+                            thread_id, product_url,
+                        )
+                        continue
+
                     thread = session.get(SupplierThread, thread_id)
                     thread.state = "OUTREACH_SENT"
                     session.add(Message(
