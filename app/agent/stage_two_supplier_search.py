@@ -1,8 +1,8 @@
 """Stage 2: Supplier search and matching. Split into two phases so fast
 deterministic browser work doesn't block on LLM latency:
 
-  1. search_and_extract — generate queries, search Alibaba, fetch each product
-     page via Browserbase, persist to supplier_products.
+  1. search_and_extract — generate queries, search all registered platforms,
+     fetch each product page via Browserbase, persist to supplier_products.
   2. match_candidates — run the fuzzy-match agent over each source/supplier
      product pair, create supplier_threads for matches.
 """
@@ -12,13 +12,13 @@ import logging
 from app.agent.match_agent import MatchResult, compare_products
 from app.agent.query_agent import generate_search_queries
 from app.db.database import SessionLocal
-from app.db.models.enums import Platform
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-from app.services.alibaba import parse_product_specs, parse_product_title, search_suppliers
 from app.services.browser import BrowserSession
+from app.services.platforms import get_platforms
+from app.services.platforms.platform import SupplierPlatform
 
 log = logging.getLogger(__name__)
 
@@ -35,25 +35,25 @@ def _is_manufacturer(specs: dict) -> bool:
             return True
         log.info("Supplier type '%s' did not match manufacturer keywords", supplier_type)
         return False
-    # Field not present at all — give them the benefit of the doubt
     return True
 
 
-def _fetch_product_specs(page, product_url: str) -> dict:
+def _fetch_product_specs(page, platform: SupplierPlatform, product_url: str) -> dict:
     page.goto(product_url, timeout=60_000)
-    try:
-        page.wait_for_selector("[data-testid='module-attribute']", timeout=15_000)
-    except Exception:
-        log.warning("No key-attributes table found on %s", product_url)
-        return {}
+    if platform.spec_selector:
+        try:
+            page.wait_for_selector(platform.spec_selector, timeout=15_000)
+        except Exception:
+            log.warning("Spec selector not found on %s", product_url)
+            return {}
     html = page.content()
     return {
-        "title": parse_product_title(html),
-        "specs": parse_product_specs(html),
+        "title": platform.parse_title(html),
+        "specs": platform.parse_specs(html),
     }
 
 
-def _upsert_supplier(session, offer: dict) -> Supplier:
+def _upsert_supplier(session, offer: dict, platform: SupplierPlatform) -> Supplier:
     supplier = session.query(Supplier).filter_by(
         profile_url=offer["profile_url"],
     ).first()
@@ -61,7 +61,7 @@ def _upsert_supplier(session, offer: dict) -> Supplier:
         return supplier
     supplier = Supplier(
         name=offer["company_name"],
-        platform=Platform.ALIBABA,
+        platform=platform.platform,
         profile_url=offer["profile_url"],
         is_verified=True,
     )
@@ -71,7 +71,7 @@ def _upsert_supplier(session, offer: dict) -> Supplier:
 
 
 def search_and_extract(source_product_id: int) -> list[SupplierProduct]:
-    """Phase 1: Search Alibaba, scrape product pages, persist supplier products."""
+    """Phase 1: Search all platforms, scrape product pages, persist supplier products."""
     with SessionLocal() as session:
         source = session.get(SourceProduct, source_product_id)
         if not source:
@@ -85,61 +85,67 @@ def search_and_extract(source_product_id: int) -> list[SupplierProduct]:
     queries = generate_search_queries(title, specs)
     log.info("Generated %d search queries for '%s'", len(queries), title)
 
-    offers = []
-    seen_product_ids = set()
-    for query in queries:
-        for offer in search_suppliers(query, page_size=10):
-            pid = offer["product_id"]
-            if pid not in seen_product_ids:
-                seen_product_ids.add(pid)
-                offers.append(offer)
-
-    log.info("Found %d unique offers across %d queries", len(offers), len(queries))
-    if not offers:
-        return []
-
+    platforms = get_platforms()
     saved = []
-    with BrowserSession() as browser:
-        for offer in offers:
-            product_url = offer["product_url"]
 
-            with SessionLocal() as session:
-                existing = session.query(SupplierProduct).filter_by(
-                    product_url=product_url,
-                ).first()
-                if existing:
-                    log.info("Already extracted %s — skipping", product_url)
-                    saved.append(existing)
+    for platform in platforms:
+        offers = []
+        seen_product_ids = set()
+        for query in queries:
+            for offer in platform.search(query, page_size=10):
+                pid = offer["product_id"]
+                if pid not in seen_product_ids:
+                    seen_product_ids.add(pid)
+                    offers.append(offer)
+
+        log.info(
+            "Found %d unique offers on %s for '%s'",
+            len(offers), platform.platform.value, title,
+        )
+        if not offers:
+            continue
+
+        with BrowserSession() as browser:
+            for offer in offers:
+                product_url = offer["product_url"]
+
+                with SessionLocal() as session:
+                    existing = session.query(SupplierProduct).filter_by(
+                        product_url=product_url,
+                    ).first()
+                    if existing:
+                        log.info("Already extracted %s — skipping", product_url)
+                        saved.append(existing)
+                        continue
+
+                log.info("Fetching specs from %s", product_url)
+                details = _fetch_product_specs(browser.page, platform, product_url)
+                if not details or not details.get("specs"):
+                    log.warning("No specs extracted for %s — skipping", product_url)
                     continue
 
-            log.info("Fetching specs from %s", product_url)
-            details = _fetch_product_specs(browser.page, product_url)
-            if not details or not details.get("specs"):
-                log.warning("No specs extracted for %s — skipping", product_url)
-                continue
+                if not _is_manufacturer(details["specs"]):
+                    log.info("Not a manufacturer — skipping %s", product_url)
+                    continue
 
-            if not _is_manufacturer(details["specs"]):
-                log.info("Not a manufacturer — skipping %s", product_url)
-                continue
+                with SessionLocal() as session:
+                    supplier = _upsert_supplier(session, offer, platform)
+                    sp = SupplierProduct(
+                        source_product_id=source_product_id,
+                        supplier_id=supplier.id,
+                        platform=platform.platform,
+                        product_url=product_url,
+                        title=details["title"] or offer["title"],
+                        specs=details["specs"],
+                        price=offer.get("price", ""),
+                        moq=offer.get("moq", ""),
+                    )
+                    session.add(sp)
+                    session.commit()
+                    session.refresh(sp)
+                    saved.append(sp)
 
-            with SessionLocal() as session:
-                supplier = _upsert_supplier(session, offer)
-                sp = SupplierProduct(
-                    source_product_id=source_product_id,
-                    supplier_id=supplier.id,
-                    platform=Platform.ALIBABA,
-                    product_url=product_url,
-                    title=details["title"] or offer["title"],
-                    specs=details["specs"],
-                    price=offer.get("price", ""),
-                    moq=offer.get("moq", ""),
-                )
-                session.add(sp)
-                session.commit()
-                session.refresh(sp)
-                saved.append(sp)
-
-    log.info("Extracted %d/%d supplier products for '%s'", len(saved), len(offers), title)
+    log.info("Extracted %d supplier products total for '%s'", len(saved), title)
     return saved
 
 
