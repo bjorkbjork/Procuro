@@ -1,3 +1,7 @@
+"""Google OAuth credential management. Attempts token refresh from DB, then .env,
+and falls back to a fully automated browser login via Browserbase if both fail.
+The refresh token is persisted to Postgres so re-auth survives restarts."""
+
 import logging
 from urllib.parse import urlparse, parse_qs
 

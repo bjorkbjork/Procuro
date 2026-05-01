@@ -1,3 +1,6 @@
+"""Gmail API client for sending outreach emails, polling supplier replies,
+and archiving handled threads."""
+
 import base64
 from email.mime.text import MIMEText
 

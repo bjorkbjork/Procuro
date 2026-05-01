@@ -1,3 +1,7 @@
+"""Google Sheets client for the input/output spreadsheet. Input tab holds product
+URLs and their pipeline status. Output tab holds supplier quotes, keyed by
+product slug + supplier name, with upsert semantics."""
+
 from googleapiclient.discovery import build
 
 from app.base.config import google_settings

@@ -1,3 +1,7 @@
+"""Captcha detection and resolution. Browserbase auto-solve is attempted first;
+if it fails, the maintainer is emailed a live session link to solve manually.
+The agent polls until the captcha clears or a 10-minute timeout expires."""
+
 import logging
 import time
 from dataclasses import dataclass, field
