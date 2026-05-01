@@ -65,41 +65,43 @@ def _detect_captcha(page: Page) -> bool:
 
 SLIDER_HANDLE = "#nc_1_n1z"
 SLIDER_TRACK = ".nc_scale"
-SLIDER_SOLVE_RETRIES = 3
-CAPTCHA_PAGE_RETRIES = 2
+CAPTCHA_PAGE_RETRIES = 3
 
 _JS_SLIDER_DRAG = (Path(__file__).parent / "slider_drag.js").read_text()
 
 
 def _try_slider_solve(page: Page) -> bool:
-    """Drag the Alibaba NoCaptcha slider entirely client-side for continuous motion."""
+    """Single attempt to drag the Alibaba NoCaptcha slider.
+
+    Alibaba removes the widget after a failed attempt, so the caller
+    must reload the page before retrying.
+    """
     handle = page.locator(SLIDER_HANDLE)
     track = page.locator(SLIDER_TRACK)
     if handle.count() == 0 or track.count() == 0:
         return False
 
-    for attempt in range(SLIDER_SOLVE_RETRIES):
-        handle_box = handle.bounding_box()
-        track_box = track.bounding_box()
-        if not handle_box or not track_box:
-            return False
+    handle_box = handle.bounding_box()
+    track_box = track.bounding_box()
+    if not handle_box or not track_box:
+        return False
 
-        result = page.evaluate(_JS_SLIDER_DRAG, {
-            "handleSel": SLIDER_HANDLE,
-            "trackSel": SLIDER_TRACK,
-            "endOffset": random.randint(5, 15),
-            "steps": random.randint(60, 100),
-            "durationMs": random.randint(400, 700),
-        })
+    result = page.evaluate(_JS_SLIDER_DRAG, {
+        "handleSel": SLIDER_HANDLE,
+        "trackSel": SLIDER_TRACK,
+        "endOffset": random.randint(5, 15),
+        "steps": random.randint(60, 100),
+        "durationMs": random.randint(400, 700),
+    })
 
-        if not result:
-            return False
+    if not result:
+        return False
 
-        if _wait_for_captcha_clear(page):
-            log.info("Slider captcha solved on attempt %d", attempt + 1)
-            return True
-        log.info("Slider attempt %d did not clear captcha", attempt + 1)
+    if _wait_for_captcha_clear(page):
+        log.info("Slider captcha solved")
+        return True
 
+    log.info("Slider drag did not clear captcha")
     return False
 
 
