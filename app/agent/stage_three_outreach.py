@@ -107,11 +107,14 @@ def send_outreach() -> int:
                     success = platform.send_inquiry(
                         browser.page, product_url, message,
                     )
-                except Exception:
+                except Exception as exc:
                     log.exception(
                         "Failed to send inquiry for thread %d (%s)",
                         thread_id, product_url,
                     )
+                    if "Target" in str(exc) and "closed" in str(exc):
+                        log.error("Browser session dead — aborting remaining inquiries")
+                        break
                     continue
 
                 if not success:
