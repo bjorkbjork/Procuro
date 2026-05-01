@@ -1,0 +1,24 @@
+{
+  "name": "procuro",
+  "version": "1.0.0",
+  "description": "Autonomous agent that sources supplier quotes for Kogan products from GlobalSources and Alibaba, negotiates FOB prices via email, and logs results to Google Sheets.",
+  "homepage": "https://github.com/bjorkbjork/Procuro#readme",
+  "bugs": {
+    "url": "https://github.com/bjorkbjork/Procuro/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bjorkbjork/Procuro.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@browserbasehq/browse-cli": "^0.6.0",
+    "@browserbasehq/cli": "^0.5.7"
+  }
+}
