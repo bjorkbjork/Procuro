@@ -1,11 +1,12 @@
-"""Alibaba supplier search via their internal JSON API. No browser session needed —
-plain HTTP requests return structured product and supplier data. Uses the
-proTextSearch endpoint with assessmentCompany=true for verified manufacturers."""
+"""Alibaba supplier search and product page parsing. Search uses their internal
+JSON API (no browser needed). Parsing functions extract specs from product page
+HTML — the caller is responsible for fetching the HTML (via Browserbase etc.)."""
 
 import logging
 import re
 
 import requests
+from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
@@ -96,3 +97,43 @@ def search_suppliers(
         len(results), query, page,
     )
     return results
+
+
+def parse_product_specs(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+    attr_div = soup.find("div", class_="module_attribute")
+    if not attr_div:
+        return {}
+
+    specs = {}
+    for group in attr_div.find_all(attrs={"data-testid": "module-attribute-group"}):
+        title_el = group.find(attrs={"data-testid": "module-attribute-group-title"})
+        group_name = title_el.get_text(strip=True) if title_el else ""
+        group_name = group_name or "Key attributes"
+
+        group_specs = {}
+        for row in group.find_all(attrs={"data-testid": "module-attribute-row"}):
+            name_el = row.find(attrs={"data-testid": "module-attribute-name"})
+            value_el = row.find(attrs={"data-testid": "module-attribute-value"})
+            if name_el and value_el:
+                key = name_el.get_text(strip=True)
+                val = value_el.get_text(strip=True)
+                if key and val:
+                    group_specs[key] = val
+        if group_specs:
+            specs[group_name] = group_specs
+
+    return specs
+
+
+def parse_product_title(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    title_tag = soup.find("title")
+    if not title_tag:
+        return ""
+    raw = title_tag.get_text(strip=True)
+    # Alibaba titles end with " - Buy <keywords> Product on Alibaba.com"
+    raw = raw.split(" - Buy ")[0].strip()
+    return raw
+
+
