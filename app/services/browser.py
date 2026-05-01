@@ -1,10 +1,14 @@
 """Browserbase session manager. Wraps Playwright over a cloud browser with
-optional geo-proxying and keep-alive for human-in-the-loop captcha solving."""
+optional geo-proxying and automatic captcha handling on every navigation."""
+
+import logging
 
 from browserbase import Browserbase
-from playwright.sync_api import Browser, Page, sync_playwright
+from playwright.sync_api import Browser, Page, Response, sync_playwright
 
 from app.base.config import browserbase_settings
+
+log = logging.getLogger(__name__)
 
 bb = Browserbase(api_key=browserbase_settings.BROWSERBASE_API_KEY)
 
@@ -29,6 +33,18 @@ class BrowserSession:
         self._live_url = debug_info.debugger_fullscreen_url
         return self._live_url
 
+    def _handle_captcha(self) -> None:
+        from app.services.captcha import handle_captcha
+
+        resolved = handle_captcha(
+            page=self.page,
+            session_url=self.live_url or "",
+            subject=f"Captcha on {self.page.url}",
+            message=f"A captcha was encountered navigating to:\n{self.page.url}",
+        )
+        if not resolved:
+            raise RuntimeError(f"Captcha not resolved on {self.page.url}")
+
     def __enter__(self) -> "BrowserSession":
         proxies = None
         if self._proxy_country:
@@ -44,6 +60,18 @@ class BrowserSession:
         self._browser = self._pw.chromium.connect_over_cdp(session.connect_url)
         context = self._browser.contexts[0]
         self.page = context.pages[0]
+
+        # Wrap page.goto so captcha detection runs after every navigation.
+        # Callers never need to handle captchas explicitly.
+        original_goto = self.page.goto
+
+        def goto_with_captcha(url, **kwargs) -> Response | None:
+            response = original_goto(url, **kwargs)
+            self._handle_captcha()
+            return response
+
+        self.page.goto = goto_with_captcha
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
