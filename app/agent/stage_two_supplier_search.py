@@ -70,8 +70,13 @@ def _upsert_supplier(session, offer: dict, platform: SupplierPlatform) -> Suppli
     return supplier
 
 
-def search_and_extract(source_product_id: int) -> list[SupplierProduct]:
-    """Phase 1: Search all platforms, scrape product pages, persist supplier products."""
+def search_and_extract(
+    source_product_id: int, queries: list[str] | None = None,
+) -> list[SupplierProduct]:
+    """Phase 1: Search all platforms, scrape product pages, persist supplier products.
+
+    Pass queries explicitly to skip the LLM query generation step.
+    """
     with SessionLocal() as session:
         source = session.get(SourceProduct, source_product_id)
         if not source:
@@ -82,7 +87,8 @@ def search_and_extract(source_product_id: int) -> list[SupplierProduct]:
     if not specs:
         raise ValueError(f"SourceProduct {source_product_id} has no specs — run Stage 1 first")
 
-    queries = generate_search_queries(title, specs)
+    if queries is None:
+        queries = generate_search_queries(title, specs)
     log.info("Generated %d search queries for '%s'", len(queries), title)
 
     platforms = get_platforms()
@@ -149,8 +155,13 @@ def search_and_extract(source_product_id: int) -> list[SupplierProduct]:
     return saved
 
 
-def match_candidates(source_product_id: int) -> list[SupplierThread]:
-    """Phase 2: Fuzzy-match each supplier product against the source product."""
+def match_candidates(
+    source_product_id: int, match_all: bool = False,
+) -> list[SupplierThread]:
+    """Phase 2: Fuzzy-match each supplier product against the source product.
+
+    Pass match_all=True to skip LLM matching and accept all candidates.
+    """
     with SessionLocal() as session:
         source = session.get(SourceProduct, source_product_id)
         if not source:
@@ -170,19 +181,25 @@ def match_candidates(source_product_id: int) -> list[SupplierThread]:
     threads = []
 
     for candidate in candidates:
-        result: MatchResult = compare_products(
-            reference_title=title,
-            reference_specs=specs,
-            candidate_title=candidate.title,
-            candidate_details=candidate.specs,
-        )
+        if match_all:
+            is_match = True
+            confidence = 1.0
+        else:
+            result: MatchResult = compare_products(
+                reference_title=title,
+                reference_specs=specs,
+                candidate_title=candidate.title,
+                candidate_details=candidate.specs,
+            )
+            is_match = result.is_match
+            confidence = result.confidence
 
         log.info(
             "Match '%s': match=%s confidence=%.2f",
-            candidate.title[:60], result.is_match, result.confidence,
+            candidate.title[:60], is_match, confidence,
         )
 
-        if not result.is_match or result.confidence < MATCH_CONFIDENCE_THRESHOLD:
+        if not is_match or confidence < MATCH_CONFIDENCE_THRESHOLD:
             continue
 
         with SessionLocal() as session:
