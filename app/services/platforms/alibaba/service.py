@@ -113,21 +113,24 @@ def login_alibaba(page: Page) -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
     page.goto("https://login.alibaba.com/", wait_until="networkidle")
 
-    google_btn = page.locator("#google a")
-    google_btn.click()
+    # Google sign-in opens in a popup window
+    with page.expect_popup() as popup_info:
+        page.locator("#google a").click()
+    popup = popup_info.value
 
     # Google OAuth form — email
-    page.wait_for_selector("input[type='email']", timeout=15_000)
-    page.fill("input[type='email']", settings.GMAIL_ACCOUNT)
-    page.click("#identifierNext")
+    popup.wait_for_selector("input[type='email']", timeout=15_000)
+    popup.fill("input[type='email']", settings.GMAIL_ACCOUNT)
+    popup.click("#identifierNext")
 
     # Google OAuth form — password
-    page.wait_for_selector("input[type='password']:visible", timeout=15_000)
-    page.fill("input[type='password']", settings.GMAIL_PASSWORD)
-    page.click("#passwordNext")
+    popup.wait_for_selector("input[type='password']:visible", timeout=15_000)
+    popup.fill("input[type='password']", settings.GMAIL_PASSWORD)
+    popup.click("#passwordNext")
 
-    # Wait for redirect back to Alibaba
-    page.wait_for_url("*alibaba.com*", timeout=30_000)
+    # Popup closes after auth, Alibaba page redirects to logged-in state
+    page.wait_for_url("**alibaba.com**", timeout=30_000)
+    page.wait_for_timeout(2_000)
     log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
 
 
