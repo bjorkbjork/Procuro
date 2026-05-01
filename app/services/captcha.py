@@ -3,6 +3,7 @@ if it fails, the maintainer is emailed a live session link to solve manually.
 The agent polls until the captcha clears or a 10-minute timeout expires."""
 
 import logging
+import random
 import time
 from dataclasses import dataclass, field
 
@@ -66,6 +67,31 @@ SLIDER_TRACK = ".nc_scale"
 SLIDER_SOLVE_RETRIES = 3
 
 
+def _bezier_drag_points(
+    start_x: float, start_y: float, end_x: float, end_y: float, n: int = 20,
+) -> list[tuple[float, float]]:
+    """Generate points along a noisy cubic bezier curve between two points."""
+    dx = end_x - start_x
+    dy = end_y - start_y
+    # Control points with vertical jitter so the path isn't a straight line
+    cp1x = start_x + dx * random.uniform(0.2, 0.4)
+    cp1y = start_y + random.uniform(-8, -2)
+    cp2x = start_x + dx * random.uniform(0.6, 0.8)
+    cp2y = start_y + random.uniform(2, 8)
+
+    points = []
+    for i in range(n + 1):
+        t = i / n
+        u = 1 - t
+        x = u**3 * start_x + 3 * u**2 * t * cp1x + 3 * u * t**2 * cp2x + t**3 * end_x
+        y = u**3 * start_y + 3 * u**2 * t * cp1y + 3 * u * t**2 * cp2y + t**3 * end_y
+        # Per-point noise
+        x += random.uniform(-1, 1)
+        y += random.uniform(-1, 1)
+        points.append((x, y))
+    return points
+
+
 def _try_slider_solve(page: Page) -> bool:
     """Drag the Alibaba NoCaptcha slider from left to right."""
     handle = page.locator(SLIDER_HANDLE)
@@ -81,19 +107,37 @@ def _try_slider_solve(page: Page) -> bool:
 
         start_x = handle_box["x"] + handle_box["width"] / 2
         start_y = handle_box["y"] + handle_box["height"] / 2
-        end_x = track_box["x"] + track_box["width"] - 10
+        end_x = track_box["x"] + track_box["width"] - random.randint(5, 15)
+
+        points = _bezier_drag_points(start_x, start_y, end_x, start_y)
 
         page.mouse.move(start_x, start_y)
         page.mouse.down()
-        page.mouse.move(end_x, start_y, steps=30)
+        for px, py in points[1:]:
+            page.mouse.move(px, py)
+            # ~50ms total for 20 steps — fast, human-like
+            page.wait_for_timeout(random.randint(1, 5))
         page.mouse.up()
-        page.wait_for_timeout(2000)
 
-        if not _detect_captcha(page):
+        if _wait_for_captcha_clear(page):
             log.info("Slider captcha solved on attempt %d", attempt + 1)
             return True
         log.info("Slider attempt %d did not clear captcha", attempt + 1)
 
+    return False
+
+
+def _wait_for_captcha_clear(page: Page, timeout: int = 10) -> bool:
+    """Wait for the captcha to clear, accounting for page navigation."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if not _detect_captcha(page):
+                return True
+        except Exception:
+            # Page is navigating — likely the captcha was solved
+            return True
+        time.sleep(0.5)
     return False
 
 
@@ -113,10 +157,9 @@ def _wait_for_auto_solve(page: Page, state: CaptchaSolveState) -> bool:
     deadline = time.monotonic() + AUTO_SOLVE_TIMEOUT
     while time.monotonic() < deadline:
         if state.auto_solve_finished:
-            page.wait_for_timeout(2000)
-            if not _detect_captcha(page):
+            if _wait_for_captcha_clear(page, timeout=5):
                 return True
-        if not _detect_captcha(page):
+        if _wait_for_captcha_clear(page, timeout=0):
             return True
         time.sleep(2)
     return False
@@ -142,7 +185,7 @@ def _send_captcha_alert(
 def _wait_for_manual_solve(page: Page) -> bool:
     deadline = time.monotonic() + MANUAL_SOLVE_TIMEOUT
     while time.monotonic() < deadline:
-        if not _detect_captcha(page):
+        if _wait_for_captcha_clear(page, timeout=5):
             return True
         time.sleep(MANUAL_SOLVE_POLL_INTERVAL)
     return False

@@ -104,7 +104,15 @@ class TestBuildMessage:
 
 
 class TestSendOutreach:
-    def test_sends_inquiry_and_updates_state(self, supplier_and_thread):
+    def _mock_threads(self, source_product, product_url, thread_id):
+        """Return a _get_threads_by_platform result scoped to one thread."""
+        return {"alibaba": [{
+            "thread_id": thread_id,
+            "product_url": product_url,
+            "source_product": source_product,
+        }]}
+
+    def test_sends_inquiry_and_updates_state(self, supplier_and_thread, source_product):
         thread = supplier_and_thread
         mock_platform = MagicMock()
         mock_platform.platform.value = "alibaba"
@@ -114,8 +122,15 @@ class TestSendOutreach:
         mock_browser.__enter__ = MagicMock(return_value=mock_browser)
         mock_browser.__exit__ = MagicMock(return_value=False)
 
+        with SessionLocal() as session:
+            sp = session.get(SupplierProduct, thread.supplier_product_id)
+            product_url = sp.product_url
+
+        grouped = self._mock_threads(source_product, product_url, thread.id)
+
         with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
-             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser):
+             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser), \
+             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value=grouped):
             count = send_outreach()
 
         assert count == 1
@@ -130,7 +145,7 @@ class TestSendOutreach:
             assert msgs[0].direction == "outbound"
             assert "QLED" in msgs[0].body
 
-    def test_skips_on_inquiry_failure(self, supplier_and_thread):
+    def test_skips_on_inquiry_failure(self, supplier_and_thread, source_product):
         thread = supplier_and_thread
         mock_platform = MagicMock()
         mock_platform.platform.value = "alibaba"
@@ -140,8 +155,15 @@ class TestSendOutreach:
         mock_browser.__enter__ = MagicMock(return_value=mock_browser)
         mock_browser.__exit__ = MagicMock(return_value=False)
 
+        with SessionLocal() as session:
+            sp = session.get(SupplierProduct, thread.supplier_product_id)
+            product_url = sp.product_url
+
+        grouped = self._mock_threads(source_product, product_url, thread.id)
+
         with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
-             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser):
+             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser), \
+             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value=grouped):
             count = send_outreach()
 
         assert count == 0
@@ -153,7 +175,8 @@ class TestSendOutreach:
         mock_platform = MagicMock()
         mock_platform.platform.value = "alibaba"
 
-        with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]):
+        with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
+             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value={}):
             count = send_outreach()
 
         assert count == 0
