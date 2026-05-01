@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from app.agent.stage_one_spec_extraction import parse_title, parse_specs, extract_specs
 from app.db.database import SessionLocal
-from app.db.models.product import Product
+from app.db.models.source_product import SourceProduct
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "html_test_fixtures"
 FIXTURE_PATH = FIXTURES_DIR / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
@@ -86,5 +86,5 @@ class TestExtractSpecs:
 
     def test_cleanup(self):
         with SessionLocal() as session:
-            session.query(Product).filter_by(source_url=TEST_URL).delete()
+            session.query(SourceProduct).filter_by(url=TEST_URL).delete()
             session.commit()

@@ -3,7 +3,7 @@ import logging
 from bs4 import BeautifulSoup
 
 from app.db.database import SessionLocal
-from app.db.models.product import Product
+from app.db.models.source_product import SourceProduct
 from app.services.browser import BrowserSession
 
 log = logging.getLogger(__name__)
@@ -47,26 +47,31 @@ def fetch_page_html(source_url: str) -> str:
         return s.page.content()
 
 
-def extract_specs(source_url: str) -> Product:
-    """Stage 1: Extract and store Kogan specs given a product URL"""
-    log.info("Extracting specs from %s", source_url)
-    html = fetch_page_html(source_url)
+def _slug_from_url(url: str) -> str:
+    return url.rstrip("/").split("/")[-1]
+
+
+def extract_specs(url: str) -> SourceProduct:
+    log.info("Extracting specs from %s", url)
+    html = fetch_page_html(url)
     soup = BeautifulSoup(html, "html.parser")
     title = parse_title(soup)
     specs = parse_specs(soup)
 
     if not title:
-        raise ValueError(f"Could not parse product title from {source_url}")
+        raise ValueError(f"Could not parse product title from {url}")
     if not specs:
-        raise ValueError(f"Could not parse specifications from {source_url}")
+        raise ValueError(f"Could not parse specifications from {url}")
 
     with SessionLocal() as session:
-        product = session.query(Product).filter_by(source_url=source_url).first()
+        product = session.query(SourceProduct).filter_by(url=url).first()
         if product:
             product.title = title
             product.specs = specs
         else:
-            product = Product(source_url=source_url, title=title, specs=specs)
+            product = SourceProduct(
+                url=url, slug=_slug_from_url(url), title=title, specs=specs,
+            )
             session.add(product)
         session.commit()
         session.refresh(product)
