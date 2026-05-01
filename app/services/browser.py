@@ -1,3 +1,6 @@
+"""Browserbase session manager. Wraps Playwright over a cloud browser with
+optional geo-proxying and keep-alive for human-in-the-loop captcha solving."""
+
 from browserbase import Browserbase
 from playwright.sync_api import Browser, Page, sync_playwright
 
