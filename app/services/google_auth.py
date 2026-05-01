@@ -3,12 +3,14 @@ and falls back to a fully automated browser login via Browserbase if both fail.
 The refresh token is persisted to Postgres so re-auth survives restarts."""
 
 import logging
+import time
 from urllib.parse import urlparse, parse_qs
 
 import requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
+from playwright.sync_api import Page
 
 from app.base.config import google_settings, settings
 from app.db.database import SessionLocal
@@ -90,6 +92,72 @@ def _exchange_code_for_tokens(code: str) -> dict:
     return resp.json()
 
 
+VERIFY_CODE_SELECTOR = "[data-verification-code]"
+VERIFY_POLL_INTERVAL = 10
+VERIFY_TIMEOUT = 300
+
+
+def _detect_verification_code(page: Page) -> str | None:
+    """Check if Google is showing a 'Verify it's you' screen with a code."""
+    el = page.locator(VERIFY_CODE_SELECTOR)
+    if el.count() > 0:
+        return el.first.text_content().strip()
+    visible = page.inner_text("body")
+    if "verify it" in visible.lower() and "you" in visible.lower():
+        for line in visible.splitlines():
+            stripped = line.strip()
+            if stripped.isdigit() and len(stripped) >= 2:
+                return stripped
+    return None
+
+
+def _handle_verification_challenge(page: Page) -> None:
+    """If Google shows a verification code, email it to the maintainer and wait."""
+    code = _detect_verification_code(page)
+    if not code:
+        return
+
+    log.warning("Google verification challenge detected — code: %s", code)
+    from app.services.gmail import GmailService
+    gmail = GmailService()
+    gmail.send_email(
+        to=settings.MAINTAINER_EMAIL_ADDRESS,
+        subject=f"[Google Verify] {code}",
+        body=f"Google is asking to verify the login. Enter this code on your device:\n\n{code}",
+    )
+    log.info("Verification code emailed to %s", settings.MAINTAINER_EMAIL_ADDRESS)
+
+    deadline = time.monotonic() + VERIFY_TIMEOUT
+    while time.monotonic() < deadline:
+        try:
+            if not _detect_verification_code(page):
+                log.info("Verification challenge cleared")
+                return
+        except Exception:
+            log.info("Verification page closed — challenge resolved")
+            return
+        time.sleep(VERIFY_POLL_INTERVAL)
+
+    raise RuntimeError("Google verification challenge not resolved within %ds" % VERIFY_TIMEOUT)
+
+
+def google_login(page: Page) -> None:
+    """Fill Google email/password on the current page, handling verification challenges.
+
+    Expects the page to already be on a Google sign-in form with email input visible.
+    """
+    page.wait_for_selector("input[type='email']", timeout=15_000)
+    page.fill("input[type='email']", settings.GMAIL_ACCOUNT)
+    page.click("#identifierNext")
+
+    page.wait_for_selector("input[type='password']:visible", timeout=15_000)
+    page.fill("input[type='password']", settings.GMAIL_PASSWORD)
+    page.click("#passwordNext")
+
+    page.wait_for_timeout(3_000)
+    _handle_verification_challenge(page)
+
+
 def _log_page_state(page, step: str) -> None:
     buttons = [
         b.text_content().strip()
@@ -129,12 +197,7 @@ def _authenticate_via_browser() -> Credentials:
         page.goto(auth_url, wait_until="networkidle")
         _log_page_state(page, "login_page")
 
-        page.fill('input[type="email"]', settings.GMAIL_ACCOUNT)
-        page.click("#identifierNext")
-        page.wait_for_selector('input[type="password"]', state="visible")
-
-        page.fill('input[type="password"]', settings.GMAIL_PASSWORD)
-        page.click("#passwordNext")
+        google_login(page)
 
         page.locator('a:has-text("Advanced")').wait_for(
             state="visible", timeout=30_000

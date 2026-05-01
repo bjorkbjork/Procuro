@@ -6,12 +6,14 @@ Login and inquiry submission use Playwright (via Browserbase)."""
 import logging
 import re
 import time
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import Page
 
 from app.base.config import settings
+from app.services.google_auth import google_login
 
 log = logging.getLogger(__name__)
 
@@ -114,22 +116,12 @@ def login_alibaba(page: Page) -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
     page.goto("https://login.alibaba.com/", wait_until="networkidle")
 
-    # Google sign-in opens in a popup window
     with page.expect_popup() as popup_info:
         page.locator("#google a").click()
     popup = popup_info.value
 
-    # Google OAuth form — email
-    popup.wait_for_selector("input[type='email']", timeout=15_000)
-    popup.fill("input[type='email']", settings.GMAIL_ACCOUNT)
-    popup.click("#identifierNext")
+    google_login(popup)
 
-    # Google OAuth form — password
-    popup.wait_for_selector("input[type='password']:visible", timeout=15_000)
-    popup.fill("input[type='password']", settings.GMAIL_PASSWORD)
-    popup.click("#passwordNext")
-
-    # Popup closes after auth, Alibaba page redirects to logged-in state
     page.wait_for_url("**alibaba.com**", timeout=30_000)
     page.wait_for_timeout(2_000)
     log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
@@ -146,6 +138,9 @@ def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
     raise TimeoutError("AliTalk inquiry iframe did not load")
 
 
+_JS_FILL_AND_SUBMIT = (Path(__file__).parent / "fill_and_submit.js").read_text()
+
+
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
@@ -157,22 +152,16 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
 
     frame = _get_inquiry_frame(page)
 
-    frame.wait_for_selector(INQUIRY_TEXTAREA, timeout=10_000)
-    frame.fill(INQUIRY_TEXTAREA, message)
+    result = frame.evaluate(_JS_FILL_AND_SUBMIT, {
+        "textareaSel": INQUIRY_TEXTAREA,
+        "submitSel": INQUIRY_SUBMIT,
+        "message": message,
+    })
 
-    frame.wait_for_selector(
-        f"{INQUIRY_SUBMIT}:not([disabled])", timeout=5_000,
-    )
-    frame.evaluate(
-        "sel => document.querySelector(sel).click()", INQUIRY_SUBMIT,
-    )
-
-    try:
-        frame.wait_for_selector(
-            INQUIRY_TEXTAREA, state="hidden", timeout=10_000,
+    if not result.get("ok"):
+        log.warning(
+            "Inquiry failed for %s: %s", product_url, result.get("reason"),
         )
-    except Exception:
-        log.warning("Form unchanged after submit for %s", product_url)
         return False
 
     log.info("Inquiry submitted for %s", product_url)
