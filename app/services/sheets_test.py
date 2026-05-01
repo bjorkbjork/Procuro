@@ -7,6 +7,8 @@ import pytest
 
 from app.services.sheets import SheetsService
 
+pytestmark = pytest.mark.integration
+
 INPUT_TAB = "Input"
 OUTPUT_TAB = "Output"
 

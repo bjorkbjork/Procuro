@@ -23,7 +23,7 @@ Autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart
 
 - **Config**: All secrets in `.env` (gitignored). See `app/base/config.py` for required vars.
 - **Database**: Local Postgres. Run migrations with `alembic upgrade head`.
-- **Testing**: TDD when practical — write unit tests first, then implement. No mocks for external services; each pipeline stage is tested as an isolated script against real services. Iterate using Browserbase dashboard for browser debugging.
+- **Testing**: TDD when practical — write unit tests first, then implement. No mocks for external services; each pipeline stage is tested as an isolated script against real services. Iterate using Browserbase dashboard for browser debugging. Tests hitting real services are marked `@pytest.mark.integration` and excluded from default `pdm run pytest`. Run them with `pdm run pytest -m integration`.
 
 ## Conventions
 
