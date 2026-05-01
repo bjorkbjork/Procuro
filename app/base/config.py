@@ -20,11 +20,11 @@ class Settings(BaseSettings):
 class PostgresSettings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
     # Database
-    PG_USER: str = "kogan"
+    PG_USER: str = "sourcing_agent"
     PG_PASSWORD: str = ""
     PG_HOST: str = "localhost"
     PG_PORT: int = 5432
-    DB_NAME: str = "koganAgentDb"
+    DB_NAME: str = "sourcingAgentDb"
 
 
 class GoogleSettings(BaseSettings):
