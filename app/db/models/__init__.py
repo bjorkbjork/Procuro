@@ -1,4 +1,5 @@
-from app.db.models.product import Product
+from app.db.models.source_product import SourceProduct
+from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_thread import SupplierThread
 from app.db.models.quote import Quote

@@ -1,15 +1,15 @@
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, UniqueConstraint, func
 
 from app.db.database import Base
+from app.db.models.enums import Platform
+
+_platform_check = f"platform IN ({', '.join(repr(p.value) for p in Platform)})"
 
 
 class Supplier(Base):
     __tablename__ = "suppliers"
     __table_args__ = (
-        CheckConstraint(
-            "platform IN ('alibaba', 'globalsources')",
-            name="check_platform",
-        ),
+        CheckConstraint(_platform_check, name="check_platform"),
         UniqueConstraint("profile_url", name="uq_supplier_profile_url"),
     )
 
