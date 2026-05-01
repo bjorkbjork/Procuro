@@ -5,6 +5,9 @@ __pycache__/
 .ruff_cache/
 .pdm-python
 .env
+# relevant information
+# https://youtu.be/xIk0_uFV-rU?si=A2NJXcz39sYBxlWf&t=104
+node_modules/
 
 # don't track my docs
 *.pdf
