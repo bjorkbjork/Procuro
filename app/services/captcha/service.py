@@ -5,7 +5,8 @@ The agent polls until the captcha clears or a 10-minute timeout expires."""
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pathlib import Path
 
 from playwright.sync_api import Page
 
@@ -65,35 +66,13 @@ def _detect_captcha(page: Page) -> bool:
 SLIDER_HANDLE = "#nc_1_n1z"
 SLIDER_TRACK = ".nc_scale"
 SLIDER_SOLVE_RETRIES = 3
+CAPTCHA_PAGE_RETRIES = 2
 
-
-def _bezier_drag_points(
-    start_x: float, start_y: float, end_x: float, end_y: float, n: int = 20,
-) -> list[tuple[float, float]]:
-    """Generate points along a noisy cubic bezier curve between two points."""
-    dx = end_x - start_x
-    dy = end_y - start_y
-    # Control points with vertical jitter so the path isn't a straight line
-    cp1x = start_x + dx * random.uniform(0.2, 0.4)
-    cp1y = start_y + random.uniform(-8, -2)
-    cp2x = start_x + dx * random.uniform(0.6, 0.8)
-    cp2y = start_y + random.uniform(2, 8)
-
-    points = []
-    for i in range(n + 1):
-        t = i / n
-        u = 1 - t
-        x = u**3 * start_x + 3 * u**2 * t * cp1x + 3 * u * t**2 * cp2x + t**3 * end_x
-        y = u**3 * start_y + 3 * u**2 * t * cp1y + 3 * u * t**2 * cp2y + t**3 * end_y
-        # Per-point noise
-        x += random.uniform(-1, 1)
-        y += random.uniform(-1, 1)
-        points.append((x, y))
-    return points
+_JS_SLIDER_DRAG = (Path(__file__).parent / "slider_drag.js").read_text()
 
 
 def _try_slider_solve(page: Page) -> bool:
-    """Drag the Alibaba NoCaptcha slider from left to right."""
+    """Drag the Alibaba NoCaptcha slider entirely client-side for continuous motion."""
     handle = page.locator(SLIDER_HANDLE)
     track = page.locator(SLIDER_TRACK)
     if handle.count() == 0 or track.count() == 0:
@@ -105,19 +84,16 @@ def _try_slider_solve(page: Page) -> bool:
         if not handle_box or not track_box:
             return False
 
-        start_x = handle_box["x"] + handle_box["width"] / 2
-        start_y = handle_box["y"] + handle_box["height"] / 2
-        end_x = track_box["x"] + track_box["width"] - random.randint(5, 15)
+        result = page.evaluate(_JS_SLIDER_DRAG, {
+            "handleSel": SLIDER_HANDLE,
+            "trackSel": SLIDER_TRACK,
+            "endOffset": random.randint(5, 15),
+            "steps": random.randint(60, 100),
+            "durationMs": random.randint(400, 700),
+        })
 
-        points = _bezier_drag_points(start_x, start_y, end_x, start_y)
-
-        page.mouse.move(start_x, start_y)
-        page.mouse.down()
-        for px, py in points[1:]:
-            page.mouse.move(px, py)
-            # ~50ms total for 20 steps — fast, human-like
-            page.wait_for_timeout(random.randint(1, 5))
-        page.mouse.up()
+        if not result:
+            return False
 
         if _wait_for_captcha_clear(page):
             log.info("Slider captcha solved on attempt %d", attempt + 1)
@@ -204,11 +180,20 @@ def handle_captcha(
     if not _detect_captcha(page):
         return True
 
-    if page.locator(SLIDER_HANDLE).count() > 0 and page.locator(SLIDER_TRACK).count() > 0:
-        log.info("Slider captcha detected — attempting drag solve")
-        if _try_slider_solve(page):
-            return True
-        log.warning("Slider solve failed — falling through to auto-solve")
+    for retry in range(1 + CAPTCHA_PAGE_RETRIES):
+        if page.locator(SLIDER_HANDLE).count() > 0 and page.locator(SLIDER_TRACK).count() > 0:
+            log.info("Slider captcha detected — attempting drag solve")
+            if _try_slider_solve(page):
+                return True
+            log.warning(
+                "Slider solve failed — reloading page (attempt %d/%d)",
+                retry + 1, 1 + CAPTCHA_PAGE_RETRIES,
+            )
+            page.reload(wait_until="networkidle")
+            if not _detect_captcha(page):
+                return True
+            continue
+        break
 
     log.info("Captcha detected — waiting for Browserbase auto-solve")
     state = CaptchaSolveState(detected=True)
