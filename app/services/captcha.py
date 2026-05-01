@@ -55,8 +55,10 @@ def _detect_captcha(page: Page) -> bool:
     for selector in CAPTCHA_WIDGET_SELECTORS:
         if page.locator(selector).count() > 0:
             return True
-    content = page.content().lower()
-    return any(marker in content for marker in CAPTCHA_TEXT_MARKERS)
+    # Check visible text only — page.content() includes scripts which
+    # contain captcha-related strings as i18n keys on non-captcha pages.
+    visible_text = page.inner_text("body").lower()
+    return any(marker in visible_text for marker in CAPTCHA_TEXT_MARKERS)
 
 
 SLIDER_HANDLE = "#nc_1_n1z"
