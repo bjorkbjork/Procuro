@@ -119,7 +119,7 @@ class WholesaleProductError(Exception):
 
 def login_alibaba(page: Page, session_url: str = "") -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
-    page.goto("https://login.alibaba.com/", wait_until="domcontentloaded")
+    page.goto("https://login.alibaba.com/")
 
     with page.expect_popup() as popup_info:
         page.locator("#google a").click()
