@@ -50,7 +50,6 @@ class BrowserbaseSettings(BaseSettings):
 
     BROWSERBASE_API_KEY: str
     BROWSERBASE_PROJECT_ID: str
-    GEMINI_API_KEY: str
 
 
 class CaptchaSettings(BaseSettings):
