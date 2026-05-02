@@ -65,19 +65,19 @@ class BrowserSession:
         if self._proxy_country:
             proxies = [{"type": "browserbase", "geolocation": {"country": self._proxy_country}}]
 
-        browser_settings = None
+        create_kwargs = {
+            "project_id": browserbase_settings.BROWSERBASE_PROJECT_ID,
+            "keep_alive": self._keep_alive,
+            "region": "ap-southeast-1",
+        }
+        if proxies:
+            create_kwargs["proxies"] = proxies
         if self._context_id:
-            browser_settings = {
+            create_kwargs["browser_settings"] = {
                 "context": {"id": self._context_id, "persist": self._persist_context},
             }
 
-        session = bb.sessions.create(
-            project_id=browserbase_settings.BROWSERBASE_PROJECT_ID,
-            proxies=proxies,
-            keep_alive=self._keep_alive,
-            browser_settings=browser_settings,
-            region="ap-southeast-1",
-        )
+        session = bb.sessions.create(**create_kwargs)
         self.session_id = session.id
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.connect_over_cdp(session.connect_url)
@@ -89,7 +89,7 @@ class BrowserSession:
         original_goto = self.page.goto
 
         def goto_with_captcha(url, **kwargs) -> Response | None:
-            kwargs.setdefault("wait_until", "domcontentloaded")
+            kwargs.setdefault("wait_until", "commit")
             response = original_goto(url, **kwargs)
             self._handle_captcha()
             return response
