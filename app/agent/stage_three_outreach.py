@@ -179,7 +179,9 @@ def _retry_with_agent(
     """Retry a failed inquiry by dropping the LLM agent into the live session."""
     log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
     try:
-        result = send_inquiry_via_agent(session_id, product_url, message)
+        result = send_inquiry_via_agent(
+            session_id, product_url, message,
+        )
     except Exception:
         log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
         return False
