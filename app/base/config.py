@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # Logfire
     LOGFIRE_TOKEN: str = ""
     MAINTAINER_EMAIL_ADDRESS: str = ""
+    MAX_WORKERS: int = 3
+    GOOGLE_TOTP_SECRET: str = ""
 
 
 class PostgresSettings(BaseSettings):
@@ -50,6 +52,12 @@ class BrowserbaseSettings(BaseSettings):
     BROWSERBASE_PROJECT_ID: str
 
 
+class CaptchaSettings(BaseSettings):
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    TWOCAPTCHA_API_KEY: str = ""
+
+
 class ModelSettings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -63,4 +71,5 @@ settings = Settings()
 pg_settings = PostgresSettings()
 google_settings = GoogleSettings()
 browserbase_settings = BrowserbaseSettings()
+captcha_settings = CaptchaSettings()
 model_settings = ModelSettings()

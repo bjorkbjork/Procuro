@@ -5,10 +5,24 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:34e45cb47e04812f35d029c4ac8120860d6d80adf812f1cbf27f86d0e33cde81"
+content_hash = "sha256:2946547a7364f600ebc49b01059930bc58daa74579d5f794d28115094425a330"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
+
+[[package]]
+name = "2captcha-python"
+version = "2.0.6"
+summary = ""
+dependencies = [
+    "aiofiles",
+    "httpx",
+    "requests",
+]
+files = [
+    {file = "2captcha_python-2.0.6-py3-none-any.whl", hash = "sha256:633c78ebdecaa802527d5bbb742fa39cdc69feca8357ef6dce2bed2a1ebb4060"},
+    {file = "2captcha_python-2.0.6.tar.gz", hash = "sha256:9e56b1616c7b7436ef847f42a1b11ab53392143dc41601f4a979e454c5bfbfcb"},
+]
 
 [[package]]
 name = "ag-ui-protocol"
@@ -32,6 +46,15 @@ dependencies = [
 files = [
     {file = "aiofile-3.9.0-py3-none-any.whl", hash = "sha256:ce2f6c1571538cbdfa0143b04e16b208ecb0e9cb4148e528af8a640ed51cc8aa"},
     {file = "aiofile-3.9.0.tar.gz", hash = "sha256:e5ad718bb148b265b6df1b3752c4d1d83024b93da9bd599df74b9d9ffcf7919b"},
+]
+
+[[package]]
+name = "aiofiles"
+version = "25.1.0"
+summary = ""
+files = [
+    {file = "aiofiles-25.1.0-py3-none-any.whl", hash = "sha256:abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695"},
+    {file = "aiofiles-25.1.0.tar.gz", hash = "sha256:a8d728f0a29de45dc521f18f07297428d56992a742f0cd2701ba86e44d23d5b2"},
 ]
 
 [[package]]
@@ -2191,6 +2214,15 @@ dependencies = [
 files = [
     {file = "pyjwt-2.12.1-py3-none-any.whl", hash = "sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c"},
     {file = "pyjwt-2.12.1.tar.gz", hash = "sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b"},
+]
+
+[[package]]
+name = "pyotp"
+version = "2.9.0"
+summary = ""
+files = [
+    {file = "pyotp-2.9.0-py3-none-any.whl", hash = "sha256:81c2e5865b8ac55e825b0358e496e1d9387c811e85bb40e71a3b29b288963612"},
+    {file = "pyotp-2.9.0.tar.gz", hash = "sha256:346b6642e0dbdde3b4ff5a930b664ca82abfa116356ed48cc42c7d6590d36f63"},
 ]
 
 [[package]]
