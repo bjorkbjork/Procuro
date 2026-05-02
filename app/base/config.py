@@ -50,6 +50,7 @@ class BrowserbaseSettings(BaseSettings):
 
     BROWSERBASE_API_KEY: str
     BROWSERBASE_PROJECT_ID: str
+    GEMINI_API_KEY: str
 
 
 class CaptchaSettings(BaseSettings):
@@ -62,9 +63,9 @@ class ModelSettings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     CHEAP: str = "au.anthropic.claude-haiku-4-5-20251001-v1:0"
-    MODERATE: str = "au.anthropic.claude-sonnet-4-6-20250514-v1:0"
+    MODERATE: str = "au.anthropic.claude-sonnet-4-6"
     # Если у тебя есть много денег :) (И, да, я говорю по-русски немного. Это не ИИ)
-    EXPENSIVE: str = "au.anthropic.claude-opus-5-6-20250514-v1:0"
+    EXPENSIVE: str = "au.anthropic.claude-opus-4-6-v1"
 
 
 settings = Settings()

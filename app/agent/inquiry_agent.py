@@ -72,6 +72,7 @@ def send_inquiry_via_agent(
             "--browserbaseProjectId", browserbase_settings.BROWSERBASE_PROJECT_ID,
             "--contextId", context_id,
             "--proxies",
+            "--modelApiKey", browserbase_settings.GEMINI_API_KEY,
         ],
         timeout=30,
         read_timeout=300,
