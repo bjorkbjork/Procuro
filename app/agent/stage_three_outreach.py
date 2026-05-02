@@ -10,6 +10,8 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import stamina
+
 from app.agent.inquiry_agent import InquiryStatus, send_inquiry_via_agent
 from app.base.config import settings
 from app.db.database import SessionLocal
@@ -17,7 +19,8 @@ from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-from app.services.browser import BrowserSession, create_context
+from app.base.config import browserbase_settings
+from app.services.browser import BrowserSession, bb, create_context
 from app.services.platforms import get_platforms
 from app.services.platforms.alibaba.service import WholesaleProductError
 from app.services.platforms.platform import SupplierPlatform
@@ -97,19 +100,45 @@ def _record_success(thread_id: int, message: str) -> None:
         session.commit()
 
 
+def _detach_browser(browser: BrowserSession) -> None:
+    """Close Playwright connection without releasing the Browserbase session."""
+    if browser._browser:
+        browser._browser.close()
+    if browser._pw:
+        browser._pw.stop()
+
+
+def _release_session(session_id: str) -> None:
+    """Release a Browserbase session."""
+    try:
+        bb.sessions.update(session_id, status="REQUEST_RELEASE")
+    except Exception:
+        log.debug("Failed to release session %s", session_id, exc_info=True)
+
+
 def _send_single_inquiry(
     platform: SupplierPlatform, thread_id: int, product_url: str, message: str,
     context_id: str, thread_name: str = "",
-) -> bool:
-    """Send one inquiry in its own browser session. Returns True on success."""
+) -> tuple[bool, str | None]:
+    """Send one inquiry in its own browser session.
+
+    Returns (success, session_id). On failure, session_id is the live
+    Browserbase session left open for agent recovery.
+    """
     if thread_name:
         threading.current_thread().name = thread_name
+
+    browser = BrowserSession(
+        proxy_country="AU", context_id=context_id, keep_alive=True,
+    )
+    browser.__enter__()
+    session_id = browser.session_id
+
     with SessionLocal() as session:
         try:
-            with BrowserSession(proxy_country="AU", context_id=context_id) as browser:
-                success = platform.send_inquiry(
-                    browser.page, product_url, message,
-                )
+            success = platform.send_inquiry(
+                browser.page, product_url, message,
+            )
         except WholesaleProductError:
             thread = session.get(SupplierThread, thread_id)
             thread.state = "UNPROCESSABLE"
@@ -118,38 +147,44 @@ def _send_single_inquiry(
                 "Thread %d skipped — wholesale-only product (%s)",
                 thread_id, product_url,
             )
-            return False
+            browser.__exit__(None, None, None)
+            return False, None
         except Exception:
             session.rollback()
             log.exception(
                 "Failed to send inquiry for thread %d (%s)",
                 thread_id, product_url,
             )
-            return False
+            _detach_browser(browser)
+            return False, session_id
 
-        if not success:
-            log.warning(
-                "Inquiry not confirmed for thread %d (%s)",
-                thread_id, product_url,
-            )
-            return False
+    if not success:
+        log.warning(
+            "Inquiry not confirmed for thread %d (%s)",
+            thread_id, product_url,
+        )
+        _detach_browser(browser)
+        return False, session_id
 
     _record_success(thread_id, message)
     log.info("Outreach sent for thread %d (%s)", thread_id, product_url)
-    return True
+    browser.__exit__(None, None, None)
+    return True, None
 
 
 def _retry_with_agent(
     thread_id: int, product_url: str, message: str,
-    context_id: str,
+    session_id: str,
 ) -> bool:
-    """Retry a failed inquiry using the LLM agent with Browserbase MCP."""
+    """Retry a failed inquiry by dropping the LLM agent into the live session."""
     log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
     try:
-        result = send_inquiry_via_agent(product_url, message, context_id)
+        result = send_inquiry_via_agent(session_id, product_url, message)
     except Exception:
         log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
         return False
+    finally:
+        _release_session(session_id)
 
     if result.status == InquiryStatus.WHOLESALE:
         with SessionLocal() as session:
@@ -169,6 +204,39 @@ def _retry_with_agent(
     _record_success(thread_id, message)
     log.info("Agent retry succeeded for thread %d (%s)", thread_id, product_url)
     return True
+
+
+@stamina.retry(on=Exception, timeout=300)
+def _authenticate_platform(platform: SupplierPlatform) -> str:
+    """Create a context, log in, and persist auth cookies. Returns context_id.
+
+    On failure the session is released by the context manager, the context is
+    discarded, and stamina retries from scratch with exponential backoff.
+    """
+    context_id = create_context()
+    try:
+        with BrowserSession(
+            proxy_country="AU", context_id=context_id, persist_context=True,
+        ) as browser:
+            platform.login(browser.page, session_url=browser.live_url or "")
+    except Exception:
+        log.exception("Auth failed for %s (context %s), stamina will retry", platform, context_id)
+        raise
+    return context_id
+
+
+def _create_agent_session(context_id: str) -> str:
+    """Create a Browserbase session with AU proxy for agent-only mode."""
+    session = bb.sessions.create(
+        project_id=browserbase_settings.BROWSERBASE_PROJECT_ID,
+        keep_alive=True,
+        region="ap-southeast-1",
+        proxies=[{"type": "browserbase", "geolocation": {"country": "AU"}}],
+        browser_settings={
+            "context": {"id": context_id, "persist": False},
+        },
+    )
+    return session.id
 
 
 def send_outreach(agent_only: bool = False) -> int:
@@ -193,11 +261,7 @@ def send_outreach(agent_only: bool = False) -> int:
             " (agent only)" if agent_only else "",
         )
 
-        context_id = create_context()
-        with BrowserSession(
-            proxy_country="AU", context_id=context_id, persist_context=True,
-        ) as browser:
-            platform.login(browser.page, session_url=browser.live_url or "")
+        context_id = _authenticate_platform(platform)
         log.info("Auth context saved")
 
         infos_with_messages = []
@@ -206,11 +270,12 @@ def send_outreach(agent_only: bool = False) -> int:
             infos_with_messages.append(info)
 
         if agent_only:
-            # Send all via LLM agent directly
+            # Send all via LLM agent — create a fresh session per inquiry
             for info in infos_with_messages:
+                session_id = _create_agent_session(context_id)
                 if _retry_with_agent(
                     info["thread_id"], info["product_url"], info["message"],
-                    context_id=context_id,
+                    session_id=session_id,
                 ):
                     sent_count += 1
             continue
@@ -230,13 +295,17 @@ def send_outreach(agent_only: bool = False) -> int:
 
             for future in as_completed(futures):
                 info = futures[future]
-                if future.result():
+                success, session_id = future.result()
+                if success:
                     sent_count += 1
                 else:
                     with SessionLocal() as session:
                         thread = session.get(SupplierThread, info["thread_id"])
-                        if thread.state == "NEW":
+                        if thread.state == "NEW" and session_id:
+                            info["session_id"] = session_id
                             failed.append(info)
+                        elif session_id:
+                            _release_session(session_id)
 
         # Pass 2: retry failures with LLM agent (sequential)
         if failed:
@@ -246,7 +315,7 @@ def send_outreach(agent_only: bool = False) -> int:
             for info in failed:
                 if _retry_with_agent(
                     info["thread_id"], info["product_url"], info["message"],
-                    context_id=context_id,
+                    session_id=info["session_id"],
                 ):
                     sent_count += 1
 
