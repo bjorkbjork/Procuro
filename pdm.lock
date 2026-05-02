@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:2946547a7364f600ebc49b01059930bc58daa74579d5f794d28115094425a330"
+content_hash = "sha256:7098d910305fef5d62299da65941f4c032aa8f8108055fdf3bd544185992669d"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -2547,6 +2547,18 @@ dependencies = [
 files = [
     {file = "sse_starlette-3.4.1-py3-none-any.whl", hash = "sha256:6b43cf21f1d574d582a6e1b0cfbde1c94dc86a32a701a7168c99c4475c6bd1d0"},
     {file = "sse_starlette-3.4.1.tar.gz", hash = "sha256:f780bebcf6c8997fe514e3bd8e8c648d8284976b391c8bed0bcb1f611632b555"},
+]
+
+[[package]]
+name = "stamina"
+version = "26.1.0"
+summary = ""
+dependencies = [
+    "tenacity",
+]
+files = [
+    {file = "stamina-26.1.0-py3-none-any.whl", hash = "sha256:62e06829bec87c06d4cafde520b32a6097d1017c378a9eb63253c5bf5ebbbb88"},
+    {file = "stamina-26.1.0.tar.gz", hash = "sha256:0214d05fdf5102c518194a4aac7520ce53cf660550ae3b940701aad88cf50c17"},
 ]
 
 [[package]]
