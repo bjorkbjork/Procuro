@@ -146,7 +146,8 @@ def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
 _JS_FILL_AND_SUBMIT = (Path(__file__).parent / "fill_and_submit.js").read_text()
 
 
-GOTO_RETRIES = 2
+PAGE_LOAD_RETRIES = 2
+PAGE_LOAD_TIMEOUT = 300_000
 SUBMIT_CONFIRM_TIMEOUT = 15
 
 
@@ -167,35 +168,39 @@ def _wait_for_submit_confirmation(page: Page, frame_url_pattern: re.Pattern, tim
     return False
 
 
+def _load_product_page(page: Page, product_url: str) -> None:
+    """Navigate to product page and wait for actionable content, with retries."""
+    for attempt in range(1 + PAGE_LOAD_RETRIES):
+        try:
+            page.goto(product_url, timeout=PAGE_LOAD_TIMEOUT)
+            page.wait_for_selector(
+                f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=PAGE_LOAD_TIMEOUT,
+            )
+            return
+        except PlaywrightError:
+            if attempt < PAGE_LOAD_RETRIES:
+                log.warning(
+                    "Page load failed for %s, retrying (%d/%d)",
+                    product_url, attempt + 1, PAGE_LOAD_RETRIES,
+                )
+                continue
+            raise
+
+
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
     Returns True if the inquiry was submitted successfully.
     Raises WholesaleProductError if the page is wholesale-only.
     """
-    for attempt in range(1 + GOTO_RETRIES):
-        try:
-            page.goto(product_url, timeout=90_000)
-            break
-        except PlaywrightError:
-            if attempt < GOTO_RETRIES:
-                log.warning("Page load timeout, retrying (%d/%d)", attempt + 1, GOTO_RETRIES)
-                continue
-            raise
+    _load_product_page(page, product_url)
 
     inquiry_btn = page.locator(INQUIRY_BUTTON)
     wholesale_btn = page.locator(WHOLESALE_INDICATOR)
-    try:
-        page.wait_for_selector(
-            f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=15_000,
-        )
-    except Exception:
-        pass
 
     if wholesale_btn.count() > 0 and inquiry_btn.count() == 0:
         raise WholesaleProductError(product_url)
 
-    page.wait_for_selector(INQUIRY_BUTTON, timeout=15_000)
     page.click(INQUIRY_BUTTON)
 
     iframe_pattern = re.compile(r"message\.alibaba\.com")
