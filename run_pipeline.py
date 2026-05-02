@@ -6,6 +6,8 @@ Usage:
     pdm run python run_pipeline.py stage2a <id> --query "75 inch QLED 4K TV"
     pdm run python run_pipeline.py stage2b <id> --match-all
     pdm run python run_pipeline.py stage3
+    pdm run python run_pipeline.py stage4
+    pdm run python run_pipeline.py stage6
     pdm run python run_pipeline.py status [source_product_id]
 """
 
@@ -84,6 +86,20 @@ def cmd_stage3(args):
     log.info("Stage 3 complete. %d inquiries sent.", count)
 
 
+def cmd_stage4(args):
+    from app.agent.stage_four_inbox_triage import triage_inbox
+
+    counts = triage_inbox()
+    log.info("Stage 4 complete. %s", counts)
+
+
+def cmd_stage6(args):
+    from app.agent.stage_six_sheet_update import update_sheet
+
+    count = update_sheet()
+    log.info("Stage 6 complete. %d rows upserted.", count)
+
+
 def cmd_status(args):
     from app.db.database import SessionLocal
     from app.db.models.source_product import SourceProduct
@@ -158,6 +174,12 @@ def main():
     s3 = sub.add_parser("stage3", help="Send outreach for all NEW threads")
     s3.add_argument("--agent", action="store_true", help="Skip deterministic flow, go direct to LLM agent")
     s3.set_defaults(func=cmd_stage3)
+
+    s4 = sub.add_parser("stage4", help="Triage Gmail inbox")
+    s4.set_defaults(func=cmd_stage4)
+
+    s6 = sub.add_parser("stage6", help="Update output Google Sheet")
+    s6.set_defaults(func=cmd_stage6)
 
     st = sub.add_parser("status", help="Show pipeline status")
     st.add_argument("source_product_id", type=int, nargs="?", default=None)
