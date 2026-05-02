@@ -11,7 +11,7 @@ import requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
-from playwright.sync_api import Page
+from playwright.sync_api import Error as PlaywrightError, Page
 
 from app.base.config import google_settings, settings
 from app.db.database import SessionLocal
@@ -178,9 +178,13 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
             log.info("Auth challenge cleared (navigated away from challenge)")
             return
 
-        if not totp_attempted and _try_totp(page):
-            totp_attempted = True
-            continue
+        try:
+            if not totp_attempted and _try_totp(page):
+                totp_attempted = True
+                continue
+        except PlaywrightError:
+            log.info("Auth popup closed during TOTP check — login resolved")
+            return
 
         if not alerted:
             description = _get_challenge_description(page)
