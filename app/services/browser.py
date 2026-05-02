@@ -13,10 +13,25 @@ log = logging.getLogger(__name__)
 bb = Browserbase(api_key=browserbase_settings.BROWSERBASE_API_KEY)
 
 
+def create_context() -> str:
+    """Create a persistent Browserbase context and return its ID."""
+    ctx = bb.contexts.create(project_id=browserbase_settings.BROWSERBASE_PROJECT_ID)
+    log.info("Created Browserbase context %s", ctx.id)
+    return ctx.id
+
+
 class BrowserSession:
-    def __init__(self, proxy_country: str | None = None, keep_alive: bool = False):
+    def __init__(
+        self,
+        proxy_country: str | None = None,
+        keep_alive: bool = False,
+        context_id: str | None = None,
+        persist_context: bool = False,
+    ):
         self._proxy_country = proxy_country
         self._keep_alive = keep_alive
+        self._context_id = context_id
+        self._persist_context = persist_context
         self._pw = None
         self._browser: Browser | None = None
         self.page: Page | None = None
@@ -50,10 +65,18 @@ class BrowserSession:
         if self._proxy_country:
             proxies = [{"type": "browserbase", "geolocation": {"country": self._proxy_country}}]
 
+        browser_settings = None
+        if self._context_id:
+            browser_settings = {
+                "context": {"id": self._context_id, "persist": self._persist_context},
+            }
+
         session = bb.sessions.create(
             project_id=browserbase_settings.BROWSERBASE_PROJECT_ID,
             proxies=proxies,
             keep_alive=self._keep_alive,
+            browser_settings=browser_settings,
+            region="ap-southeast-1",
         )
         self.session_id = session.id
         self._pw = sync_playwright().start()
