@@ -2,11 +2,10 @@
 since this is straightforward extraction — pull key attributes and form a search string.
 """
 
-from pydantic_ai import Agent
 from pydantic_ai.settings import ModelSettings
 
 from app.base.config import model_settings
-from app.base.llm import get_model
+from app.base.llm import Agent, get_model
 
 SYSTEM_PROMPT = """\
 You generate search queries for supplier sourcing platforms based on product specifications.

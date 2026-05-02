@@ -3,10 +3,9 @@ whether they describe the same (or functionally equivalent) product. Uses a
 moderate model for semantic understanding of spec equivalences."""
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
 
 from app.base.config import model_settings
-from app.base.llm import get_model
+from app.base.llm import Agent, get_model
 
 SYSTEM_PROMPT = """\
 You are a product specification comparison expert for wholesale sourcing.

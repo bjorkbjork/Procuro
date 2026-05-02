@@ -15,10 +15,10 @@ import re
 from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, Tool
+from pydantic_ai import Tool
 
 from app.base.config import model_settings, settings
-from app.base.llm import get_model
+from app.base.llm import Agent, get_model
 from app.db.database import SessionLocal
 from app.db.models.keyvalue import KeyValue
 from app.db.models.message import Message
