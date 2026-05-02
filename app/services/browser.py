@@ -89,6 +89,7 @@ class BrowserSession:
         original_goto = self.page.goto
 
         def goto_with_captcha(url, **kwargs) -> Response | None:
+            kwargs.setdefault("wait_until", "domcontentloaded")
             response = original_goto(url, **kwargs)
             self._handle_captcha()
             return response
