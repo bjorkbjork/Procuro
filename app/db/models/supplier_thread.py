@@ -21,6 +21,7 @@ VALID_STATES = (
     "NEGOTIATING",
     "FINAL_PRICE_LOGGED",
     "CLOSED",
+    "UNPROCESSABLE",
 )
 
 
