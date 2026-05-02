@@ -23,8 +23,11 @@ class Platform:
     def parse_title(self, html: str) -> str:
         return parse_product_title(html)
 
-    def login(self, page: Page) -> None:
-        login_alibaba(page)
+    def login(self, page: Page, session_url: str = "") -> None:
+        login_alibaba(page, session_url=session_url)
 
     def send_inquiry(self, page: Page, product_url: str, message: str) -> bool:
         return send_product_inquiry(page, product_url, message)
+
+    def url_slug(self, product_url: str) -> str:
+        return product_url.split("/")[-1].split("?")[0]

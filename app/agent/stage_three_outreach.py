@@ -5,6 +5,8 @@ template and submits it through the platform's inquiry form. Updates
 thread state to OUTREACH_SENT and logs the message."""
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.base.config import settings
 from app.db.database import SessionLocal
@@ -12,8 +14,9 @@ from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-from app.services.browser import BrowserSession
+from app.services.browser import BrowserSession, create_context
 from app.services.platforms import get_platforms
+from app.services.platforms.alibaba.service import WholesaleProductError
 from app.services.platforms.platform import SupplierPlatform
 
 log = logging.getLogger(__name__)
@@ -78,6 +81,58 @@ def _get_threads_by_platform() -> dict[str, list[dict]]:
     return grouped
 
 
+def _send_single_inquiry(
+    platform: SupplierPlatform, thread_id: int, product_url: str, message: str,
+    context_id: str, thread_name: str = "",
+) -> bool:
+    """Send one inquiry in its own browser session. Returns True on success."""
+    if thread_name:
+        threading.current_thread().name = thread_name
+    with SessionLocal() as session:
+        try:
+            with BrowserSession(proxy_country="AU", context_id=context_id) as browser:
+                success = platform.send_inquiry(
+                    browser.page, product_url, message,
+                )
+        except WholesaleProductError:
+            thread = session.get(SupplierThread, thread_id)
+            thread.state = "UNPROCESSABLE"
+            session.commit()
+            log.info(
+                "Thread %d skipped — wholesale-only product (%s)",
+                thread_id, product_url,
+            )
+            return False
+        except Exception:
+            session.rollback()
+            log.exception(
+                "Failed to send inquiry for thread %d (%s)",
+                thread_id, product_url,
+            )
+            return False
+
+        if not success:
+            session.rollback()
+            log.warning(
+                "Inquiry not confirmed for thread %d (%s)",
+                thread_id, product_url,
+            )
+            return False
+
+        thread = session.get(SupplierThread, thread_id)
+        thread.state = "OUTREACH_SENT"
+        session.add(Message(
+            thread_id=thread_id,
+            direction="outbound",
+            subject="Initial outreach",
+            body=message,
+        ))
+        session.commit()
+
+    log.info("Outreach sent for thread %d (%s)", thread_id, product_url)
+    return True
+
+
 def send_outreach() -> int:
     """Send outreach for all NEW supplier threads. Returns count of inquiries sent."""
     platforms = {p.platform.value: p for p in get_platforms()}
@@ -94,51 +149,28 @@ def send_outreach() -> int:
             "Sending %d inquiries on %s", len(thread_infos), platform_name,
         )
 
-        with BrowserSession() as browser:
-            platform.login(browser.page)
+        context_id = create_context()
+        with BrowserSession(
+            proxy_country="AU", context_id=context_id, persist_context=True,
+        ) as browser:
+            platform.login(browser.page, session_url=browser.live_url or "")
+        log.info("Auth context saved — spawning %d workers", len(thread_infos))
 
+        futures = {}
+        with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
             for info in thread_infos:
-                thread_id = info["thread_id"]
-                product_url = info["product_url"]
-                source_product = info["source_product"]
-                message = _build_message(source_product)
+                message = _build_message(info["source_product"])
+                slug = platform.url_slug(info["product_url"])
+                future = pool.submit(
+                    _send_single_inquiry,
+                    platform, info["thread_id"], info["product_url"], message,
+                    context_id=context_id, thread_name=slug,
+                )
+                futures[future] = info["thread_id"]
 
-                with SessionLocal() as session:
-                    try:
-                        success = platform.send_inquiry(
-                            browser.page, product_url, message,
-                        )
-                    except Exception as exc:
-                        session.rollback()
-                        log.exception(
-                            "Failed to send inquiry for thread %d (%s)",
-                            thread_id, product_url,
-                        )
-                        if "Target" in str(exc) and "closed" in str(exc):
-                            log.error("Browser session dead — aborting remaining inquiries")
-                            break
-                        continue
-
-                    if not success:
-                        session.rollback()
-                        log.warning(
-                            "Inquiry not confirmed for thread %d (%s)",
-                            thread_id, product_url,
-                        )
-                        continue
-
-                    thread = session.get(SupplierThread, thread_id)
-                    thread.state = "OUTREACH_SENT"
-                    session.add(Message(
-                        thread_id=thread_id,
-                        direction="outbound",
-                        subject="Initial outreach",
-                        body=message,
-                    ))
-                    session.commit()
-
-                sent_count += 1
-                log.info("Outreach sent for thread %d (%s)", thread_id, product_url)
+            for future in as_completed(futures):
+                if future.result():
+                    sent_count += 1
 
     log.info("Stage 3 complete: %d inquiries sent", sent_count)
     return sent_count

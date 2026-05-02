@@ -15,7 +15,7 @@ import sys
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    format="%(asctime)s [%(threadName)s] %(name)s %(levelname)s %(message)s",
 )
 log = logging.getLogger("pipeline")
 
@@ -28,7 +28,9 @@ def cmd_stage1(args):
     log.info("  Source product ID: %d", product.id)
     log.info("  Title: %s", product.title)
     log.info("  Spec groups: %d", len(product.specs))
-    log.info("Use this ID for stage2: pdm run python run_pipeline.py stage2 %d", product.id)
+    log.info(
+        "Use this ID for stage2: pdm run python run_pipeline.py stage2 %d", product.id
+    )
 
 
 def cmd_stage2(args):
@@ -37,7 +39,12 @@ def cmd_stage2(args):
     threads = run_supplier_search(args.source_product_id)
     log.info("Stage 2 complete. %d supplier threads created.", len(threads))
     for t in threads:
-        log.info("  Thread %d: supplier_product=%d state=%s", t.id, t.supplier_product_id, t.state)
+        log.info(
+            "  Thread %d: supplier_product=%d state=%s",
+            t.id,
+            t.supplier_product_id,
+            t.state,
+        )
     if threads:
         log.info("Run stage3: pdm run python run_pipeline.py stage3")
 
@@ -50,7 +57,10 @@ def cmd_stage2a(args):
     log.info("Stage 2a complete. %d supplier products extracted.", len(products))
     for sp in products:
         log.info("  %s — %s", sp.product_url[:80], sp.title[:60])
-    log.info("Run matching: pdm run python run_pipeline.py stage2b %d", args.source_product_id)
+    log.info(
+        "Run matching: pdm run python run_pipeline.py stage2b %d",
+        args.source_product_id,
+    )
 
 
 def cmd_stage2b(args):
@@ -59,7 +69,12 @@ def cmd_stage2b(args):
     threads = match_candidates(args.source_product_id, match_all=args.match_all)
     log.info("Stage 2b complete. %d threads matched.", len(threads))
     for t in threads:
-        log.info("  Thread %d: supplier_product=%d state=%s", t.id, t.supplier_product_id, t.state)
+        log.info(
+            "  Thread %d: supplier_product=%d state=%s",
+            t.id,
+            t.supplier_product_id,
+            t.state,
+        )
 
 
 def cmd_stage3(args):
@@ -90,12 +105,14 @@ def cmd_status(args):
             return
 
         for sp in products:
-            sup_products = session.query(SupplierProduct).filter_by(
-                source_product_id=sp.id
-            ).count()
-            threads = session.query(SupplierThread).filter_by(
-                source_product_id=sp.id
-            ).all()
+            sup_products = (
+                session.query(SupplierProduct)
+                .filter_by(source_product_id=sp.id)
+                .count()
+            )
+            threads = (
+                session.query(SupplierThread).filter_by(source_product_id=sp.id).all()
+            )
             state_counts = {}
             for t in threads:
                 state_counts[t.state] = state_counts.get(t.state, 0) + 1
@@ -103,7 +120,11 @@ def cmd_status(args):
             log.info("Source product %d: %s", sp.id, sp.title[:60])
             log.info("  URL: %s", sp.url)
             log.info("  Supplier products: %d", sup_products)
-            log.info("  Threads: %d %s", len(threads), dict(state_counts) if state_counts else "")
+            log.info(
+                "  Threads: %d %s",
+                len(threads),
+                dict(state_counts) if state_counts else "",
+            )
 
 
 def main():
@@ -120,12 +141,18 @@ def main():
 
     s2a = sub.add_parser("stage2a", help="Search & extract only (no LLM matching)")
     s2a.add_argument("source_product_id", type=int)
-    s2a.add_argument("--query", nargs="+", help="Search queries (skip LLM query generation)")
+    s2a.add_argument(
+        "--query", nargs="+", help="Search queries (skip LLM query generation)"
+    )
     s2a.set_defaults(func=cmd_stage2a)
 
     s2b = sub.add_parser("stage2b", help="Match candidates only (LLM)")
     s2b.add_argument("source_product_id", type=int)
-    s2b.add_argument("--match-all", action="store_true", help="Accept all candidates (skip LLM matching)")
+    s2b.add_argument(
+        "--match-all",
+        action="store_true",
+        help="Accept all candidates (skip LLM matching)",
+    )
     s2b.set_defaults(func=cmd_stage2b)
 
     s3 = sub.add_parser("stage3", help="Send outreach for all NEW threads")
