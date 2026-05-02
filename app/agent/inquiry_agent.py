@@ -3,20 +3,24 @@
 Used as a fallback when the deterministic Playwright flow fails (typically
 due to captchas or unexpected page state). Gets dropped into the existing
 browser session at the point of failure and uses CLI commands to diagnose
-and complete the inquiry."""
+and complete the inquiry.
+
+Large tool outputs (snapshots, page text) are automatically evicted to disk
+by the Agent subclass — the agent gets grep/read tools to explore."""
 
 import logging
 import os
+import re
 import shlex
 import subprocess
 from enum import Enum
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, Tool
+from pydantic_ai import Tool
 
 from app.base.config import browserbase_settings, model_settings
-from app.base.llm import get_model
+from app.base.llm import Agent, get_model
 
 log = logging.getLogger(__name__)
 
@@ -29,32 +33,53 @@ the exact browser session where it got stuck.
 
 Your job: figure out what went wrong and complete the inquiry.
 
-Available browse commands (pass as the `command` argument):
-- snapshot              — get accessibility tree (your primary way to "see" the page)
-- screenshot [path]     — save screenshot to file
-- click <ref>           — click element by ref from snapshot (e.g. "click @0-5")
+## Tools
+
+**browse** — run a CLI command against the browser session:
+- snapshot              — accessibility tree (filtered to page content)
+- click <ref>           — click by ref from snapshot (e.g. "click @0-5")
 - click_xy <x> <y>     — click at exact pixel coordinates
-- fill <selector> <value> — fill an input field (CSS selector)
-- type <text>           — type text into the currently focused element
-- press <key>           — press a key (Enter, Tab, Escape, Ctrl+A, etc.)
+- fill <selector> <value> — fill an input (CSS selector)
+- type <text>           — type into focused element
+- press <key>           — press key (Enter, Tab, Escape, Ctrl+A, etc.)
 - open <url>            — navigate to URL
-- get url               — get current URL
-- get text [selector]   — get text content of page or element
-- scroll <x> <y> <dx> <dy> — scroll at coordinates
-- drag <x1> <y1> <x2> <y2> — drag between points (for slider captchas)
-- wait load|selector|timeout [arg] — wait for a condition
-- eval <js-expression>  — evaluate JavaScript in the page
+- get url               — current URL
+- get text [selector]   — text content
+- scroll <x> <y> <dx> <dy> — scroll
+- drag <x1> <y1> <x2> <y2> — drag (slider captchas)
+- wait load|selector|timeout [arg]
+- eval <js-expression>
 
-Start by running `snapshot` to see the current page state, then decide what \
-to do.
+When output is large, it is automatically evicted to disk and replaced with a \
+blob ID. Use the eviction tools to explore:
 
-Rules:
+**grep_evicted_result** — search an evicted result by blob_id and regex pattern.
+**read_evicted_result** — read a line range from an evicted result by blob_id.
+
+## Workflow
+
+1. Run `snapshot` to see current page state.
+2. If the result was evicted, grep for key elements ("Send inquiry", \
+   "textarea", "captcha", "Start order") to orient yourself.
+3. Act on what you find, then snapshot again to verify.
+
+## Rules
+
 - Do NOT modify the inquiry message — paste it exactly as provided.
 - If the page shows a captcha/slider, try to solve it.
-- If you see a "Start order" button but no inquiry option, the product is \
-  wholesale-only — return WHOLESALE.
-- If you can't complete after 3 attempts, return FAILED with a reason.
-- Be methodical: snapshot → act → snapshot to verify."""
+- If you see a "Start order" button but no inquiry option → return WHOLESALE.
+- If you can't complete after 3 attempts → return FAILED with a reason."""
+
+
+_I18N_PATTERN = re.compile(r'"intl-|gangesweb|"i18n')
+
+
+def _strip_i18n(output: str) -> str:
+    """Remove i18n/localisation noise lines from snapshot output."""
+    return "\n".join(
+        line for line in output.splitlines()
+        if not _I18N_PATTERN.search(line)
+    )
 
 
 class InquiryStatus(str, Enum):
@@ -71,7 +96,8 @@ class InquiryResult(BaseModel):
     )
 
 
-def _make_browse_tool(session_id: str) -> Tool:
+
+def _make_tools(session_id: str) -> list[Tool]:
     env = {
         **os.environ,
         "BROWSERBASE_API_KEY": browserbase_settings.BROWSERBASE_API_KEY,
@@ -79,22 +105,31 @@ def _make_browse_tool(session_id: str) -> Tool:
     }
 
     def browse(command: str) -> str:
-        """Run a browse CLI command against the live browser session.
+        """Run a browse CLI command against the live browser session."""
+        parts = shlex.split(command)
+        if not parts:
+            return "ERROR: empty command"
 
-        Pass the command exactly as you would on the command line after `browse`,
-        e.g. "snapshot", "click @0-5", "fill #message 'hello'".
-        """
-        args = [BROWSE_BIN, "--connect", session_id] + shlex.split(command)
-        log.debug("browse CLI: %s", " ".join(args))
+        if parts[0] == "snapshot" and "--compact" not in parts:
+            parts.append("--compact")
+
+        args = [BROWSE_BIN, "--connect", session_id] + parts
+        log.info("browse CLI: %s", " ".join(args[2:]))
         result = subprocess.run(
             args, capture_output=True, text=True, timeout=60, env=env,
         )
         output = result.stdout
         if result.returncode != 0 and result.stderr:
             output += f"\nERROR: {result.stderr}"
-        return output or "(no output)"
+        if not output:
+            return "(no output)"
 
-    return Tool(browse, takes_ctx=False)
+        if parts[0] == "snapshot":
+            output = _strip_i18n(output)
+
+        return output
+
+    return [Tool(browse, takes_ctx=False)]
 
 
 def send_inquiry_via_agent(
@@ -107,7 +142,7 @@ def send_inquiry_via_agent(
         model=get_model(model_settings.CHEAP),
         system_prompt=SYSTEM_PROMPT,
         output_type=InquiryResult,
-        tools=[_make_browse_tool(session_id)],
+        tools=_make_tools(session_id),
         retries=2,
     )
 
