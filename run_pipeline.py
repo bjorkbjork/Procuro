@@ -7,6 +7,7 @@ Usage:
     pdm run python run_pipeline.py stage2b <id> --match-all
     pdm run python run_pipeline.py stage3
     pdm run python run_pipeline.py stage4
+    pdm run python run_pipeline.py stage5
     pdm run python run_pipeline.py stage6
     pdm run python run_pipeline.py status [source_product_id]
 """
@@ -93,6 +94,13 @@ def cmd_stage4(args):
     log.info("Stage 4 complete. %s", counts)
 
 
+def cmd_stage5(args):
+    from app.agent.stage_five_negotiation import process_negotiations
+
+    counts = process_negotiations()
+    log.info("Stage 5 complete. %s", counts)
+
+
 def cmd_stage6(args):
     from app.agent.stage_six_sheet_update import update_sheet
 
@@ -177,6 +185,9 @@ def main():
 
     s4 = sub.add_parser("stage4", help="Triage Gmail inbox")
     s4.set_defaults(func=cmd_stage4)
+
+    s5 = sub.add_parser("stage5", help="Process negotiations")
+    s5.set_defaults(func=cmd_stage5)
 
     s6 = sub.add_parser("stage6", help="Update output Google Sheet")
     s6.set_defaults(func=cmd_stage6)
