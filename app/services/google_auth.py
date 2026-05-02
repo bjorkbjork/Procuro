@@ -6,6 +6,7 @@ import logging
 import time
 from urllib.parse import urlparse, parse_qs
 
+import pyotp
 import requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -92,57 +93,106 @@ def _exchange_code_for_tokens(code: str) -> dict:
     return resp.json()
 
 
-VERIFY_CODE_SELECTOR = "[data-verification-code]"
-VERIFY_POLL_INTERVAL = 10
-VERIFY_TIMEOUT = 300
+CHALLENGE_POLL_INTERVAL = 10
+CHALLENGE_TIMEOUT = 300
+
+TOTP_INPUT_SELECTORS = [
+    "input[name='totpPin']",
+    "input#totpPin",
+    "input[type='tel']",
+]
+
+CHALLENGE_URL_MARKER = "accounts.google.com/v3/signin/challenge"
 
 
-def _detect_verification_code(page: Page) -> str | None:
-    """Check if Google is showing a 'Verify it's you' screen with a code."""
-    el = page.locator(VERIFY_CODE_SELECTOR)
-    if el.count() > 0:
-        return el.first.text_content().strip()
-    visible = page.inner_text("body")
-    if "verify it" in visible.lower() and "you" in visible.lower():
+def _on_challenge_page(page: Page) -> bool:
+    """Check if we're on a Google auth challenge page."""
+    try:
+        return CHALLENGE_URL_MARKER in page.url
+    except Exception:
+        return False
+
+
+def _try_totp(page: Page) -> bool:
+    """If a TOTP input is visible and we have a secret, fill it. Returns True if handled."""
+    if not settings.GOOGLE_TOTP_SECRET:
+        return False
+
+    for selector in TOTP_INPUT_SELECTORS:
+        inp = page.locator(selector)
+        if inp.count() > 0 and inp.first.is_visible():
+            secret = settings.GOOGLE_TOTP_SECRET.replace(" ", "")
+            code = pyotp.TOTP(secret).now()
+            log.info("Filling TOTP code")
+            inp.first.fill(code)
+            page.locator("button#totpNext, button:has-text('Next')").first.click()
+            page.wait_for_timeout(3_000)
+            return True
+    return False
+
+
+def _get_challenge_description(page: Page) -> str:
+    """Extract a human-readable description of the current challenge."""
+    try:
+        visible = page.inner_text("body")
         for line in visible.splitlines():
             stripped = line.strip()
-            if stripped.isdigit() and len(stripped) >= 2:
+            if len(stripped) > 10:
                 return stripped
-    return None
+    except Exception:
+        pass
+    return "Unknown challenge"
 
 
-def _handle_verification_challenge(page: Page) -> None:
-    """If Google shows a verification code, email it to the maintainer and wait."""
-    code = _detect_verification_code(page)
-    if not code:
-        return
+def _handle_auth_challenges(page: Page, session_url: str) -> None:
+    """Handle Google auth challenges after password entry.
 
-    log.warning("Google verification challenge detected — code: %s", code)
-    from app.services.gmail import GmailService
-    gmail = GmailService()
-    gmail.send_email(
-        to=settings.MAINTAINER_EMAIL_ADDRESS,
-        subject=f"[Google Verify] {code}",
-        body=f"Google is asking to verify the login. Enter this code on your device:\n\n{code}",
-    )
-    log.info("Verification code emailed to %s", settings.MAINTAINER_EMAIL_ADDRESS)
+    Attempts TOTP automatically if configured. Falls back to emailing
+    the maintainer a live session link for manual resolution.
+    """
+    alerted = False
 
-    deadline = time.monotonic() + VERIFY_TIMEOUT
+    deadline = time.monotonic() + CHALLENGE_TIMEOUT
     while time.monotonic() < deadline:
         try:
-            if not _detect_verification_code(page):
-                log.info("Verification challenge cleared")
-                return
+            on_challenge = _on_challenge_page(page)
         except Exception:
-            log.info("Verification page closed — challenge resolved")
+            log.info("Challenge page closed — auth resolved")
             return
-        time.sleep(VERIFY_POLL_INTERVAL)
 
-    raise RuntimeError("Google verification challenge not resolved within %ds" % VERIFY_TIMEOUT)
+        if not on_challenge:
+            if alerted:
+                log.info("Auth challenge cleared")
+            return
+
+        if _try_totp(page):
+            continue
+
+        if not alerted:
+            description = _get_challenge_description(page)
+            log.warning("Google auth challenge requires manual action: %s", description)
+            from app.services.gmail import GmailService
+            gmail = GmailService()
+            gmail.send_email(
+                to=settings.MAINTAINER_EMAIL_ADDRESS,
+                subject="[Google Auth] Challenge requires manual action",
+                body=(
+                    f"Google is blocking login with a challenge:\n\n"
+                    f"  {description}\n\n"
+                    f"Resolve it here:\n{session_url}\n\n"
+                    f"The agent will resume automatically once the challenge clears."
+                ),
+            )
+            log.info("Challenge alert sent to %s", settings.MAINTAINER_EMAIL_ADDRESS)
+            alerted = True
+
+        time.sleep(CHALLENGE_POLL_INTERVAL)
+
+    raise RuntimeError("Google auth challenge not resolved within %ds" % CHALLENGE_TIMEOUT)
 
 
-def google_login(page: Page) -> None:
-    """Fill Google email/password on the current page, handling verification challenges.
+def google_login(page: Page, session_url: str = "") -> None:
+    """Fill Google email/password on the current page, handling auth challenges.
 
     Expects the page to already be on a Google sign-in form with email input visible.
     """
@@ -155,7 +205,7 @@ def google_login(page: Page) -> None:
     page.click("#passwordNext")
 
     page.wait_for_timeout(3_000)
-    _handle_verification_challenge(page)
+    _handle_auth_challenges(page, session_url)
 
 
 def _log_page_state(page, step: str) -> None:
