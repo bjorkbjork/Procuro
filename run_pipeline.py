@@ -80,7 +80,7 @@ def cmd_stage2b(args):
 def cmd_stage3(args):
     from app.agent.stage_three_outreach import send_outreach
 
-    count = send_outreach()
+    count = send_outreach(agent_only=args.agent)
     log.info("Stage 3 complete. %d inquiries sent.", count)
 
 
@@ -156,6 +156,7 @@ def main():
     s2b.set_defaults(func=cmd_stage2b)
 
     s3 = sub.add_parser("stage3", help="Send outreach for all NEW threads")
+    s3.add_argument("--agent", action="store_true", help="Skip deterministic flow, go direct to LLM agent")
     s3.set_defaults(func=cmd_stage3)
 
     st = sub.add_parser("status", help="Show pipeline status")

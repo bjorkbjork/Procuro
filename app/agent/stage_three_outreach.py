@@ -171,8 +171,12 @@ def _retry_with_agent(
     return True
 
 
-def send_outreach() -> int:
-    """Send outreach for all NEW supplier threads. Returns count of inquiries sent."""
+def send_outreach(agent_only: bool = False) -> int:
+    """Send outreach for all NEW supplier threads. Returns count of inquiries sent.
+
+    When agent_only=True, skips the deterministic Playwright flow and sends
+    all inquiries via the LLM agent directly.
+    """
     platforms = {p.platform.value: p for p in get_platforms()}
     grouped = _get_threads_by_platform()
     sent_count = 0
@@ -184,7 +188,9 @@ def send_outreach() -> int:
             continue
 
         log.info(
-            "Sending %d inquiries on %s", len(thread_infos), platform_name,
+            "Sending %d inquiries on %s%s",
+            len(thread_infos), platform_name,
+            " (agent only)" if agent_only else "",
         )
 
         context_id = create_context()
@@ -192,21 +198,35 @@ def send_outreach() -> int:
             proxy_country="AU", context_id=context_id, persist_context=True,
         ) as browser:
             platform.login(browser.page, session_url=browser.live_url or "")
-        log.info("Auth context saved — spawning %d workers", len(thread_infos))
+        log.info("Auth context saved")
+
+        infos_with_messages = []
+        for info in thread_infos:
+            info["message"] = _build_message(info["source_product"])
+            infos_with_messages.append(info)
+
+        if agent_only:
+            # Send all via LLM agent directly
+            for info in infos_with_messages:
+                if _retry_with_agent(
+                    info["thread_id"], info["product_url"], info["message"],
+                    context_id=context_id,
+                ):
+                    sent_count += 1
+            continue
 
         # Pass 1: deterministic Playwright flow (threaded)
         failed: list[dict] = []
         futures = {}
         with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
-            for info in thread_infos:
-                message = _build_message(info["source_product"])
+            for info in infos_with_messages:
                 slug = platform.url_slug(info["product_url"])
                 future = pool.submit(
                     _send_single_inquiry,
-                    platform, info["thread_id"], info["product_url"], message,
+                    platform, info["thread_id"], info["product_url"], info["message"],
                     context_id=context_id, thread_name=slug,
                 )
-                futures[future] = {**info, "message": message}
+                futures[future] = info
 
             for future in as_completed(futures):
                 info = futures[future]
