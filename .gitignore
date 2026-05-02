@@ -8,6 +8,7 @@ __pycache__/
 # relevant information
 # https://youtu.be/xIk0_uFV-rU?si=A2NJXcz39sYBxlWf&t=104
 node_modules/
+snapshots/
 
 # don't track my docs
 *.pdf
