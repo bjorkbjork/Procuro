@@ -87,24 +87,15 @@ class SheetsService:
         return None
 
     def _write_output_row(self, sheet_row: int, data: dict) -> None:
-        """Write columns A:B and D:J for a given sheet row (1-indexed)."""
-        vals = self.service.spreadsheets().values()
-        # A:B (title, link)
-        vals.update(
+        """Write columns A:J for a given sheet row (1-indexed)."""
+        self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range=f"{OUTPUT_TAB}!A{sheet_row}:B{sheet_row}",
+            range=f"{OUTPUT_TAB}!A{sheet_row}:J{sheet_row}",
             valueInputOption="RAW",
             body={"values": [[
                 data.get("source_product_title", ""),
                 data.get("source_link", ""),
-            ]]},
-        ).execute()
-        # D:J (supplier_name through initial_outreach_date), skipping C (slug formula)
-        vals.update(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{OUTPUT_TAB}!D{sheet_row}:J{sheet_row}",
-            valueInputOption="RAW",
-            body={"values": [[
+                data.get("source_slug", ""),
                 data.get("supplier_name", ""),
                 data.get("best_price_usd_fob", ""),
                 data.get("moq", ""),
@@ -117,27 +108,16 @@ class SheetsService:
 
     def upsert_output_row(self, data: dict) -> None:
         rows = self.read_output_rows()
-        link = data.get("source_link", "")
+        slug = data.get("source_slug", "")
         supplier = data.get("supplier_name", "")
-        # Derive slug the same way the sheet formula does
-        slug = link.split("/buy/", 1)[1] if "/buy/" in link else ""
 
         for i, row in enumerate(rows):
             if row["source_slug"] == slug and row["supplier_name"] == supplier:
                 self._write_output_row(i + 2, data)
                 return
 
-        # Append: write to the next empty row and set the slug formula
         sheet_row = len(rows) + 2
         self._write_output_row(sheet_row, data)
-        self.service.spreadsheets().values().update(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{OUTPUT_TAB}!C{sheet_row}",
-            valueInputOption="USER_ENTERED",
-            body={"values": [[
-                f'=MID(B{sheet_row}, SEARCH("/buy/",B{sheet_row}) + 5, LEN(B{sheet_row}))'
-            ]]},
-        ).execute()
 
     def delete_output_row(self, slug: str, supplier_name: str) -> None:
         idx = self._find_output_row(slug, supplier_name)
