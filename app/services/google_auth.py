@@ -107,6 +107,8 @@ CHALLENGE_URL_MARKER = "accounts.google.com/v3/signin/challenge"
 def _on_challenge_page(page: Page) -> bool:
     """Check if we're on a Google auth challenge page."""
     try:
+        if page.is_closed():
+            return False
         return CHALLENGE_URL_MARKER in page.url
     except Exception:
         return False
@@ -162,6 +164,10 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
 
     deadline = time.monotonic() + CHALLENGE_TIMEOUT
     while time.monotonic() < deadline:
+        if page.is_closed():
+            log.info("Auth popup closed — login resolved")
+            return
+
         try:
             on_challenge = _on_challenge_page(page)
         except Exception:
@@ -169,8 +175,7 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
             return
 
         if not on_challenge:
-            if alerted:
-                log.info("Auth challenge cleared")
+            log.info("Auth challenge cleared (navigated away from challenge)")
             return
 
         if not totp_attempted and _try_totp(page):
