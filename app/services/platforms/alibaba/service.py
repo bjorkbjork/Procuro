@@ -106,7 +106,7 @@ def search_suppliers(
     return results
 
 
-INQUIRY_BUTTON = "button:has-text('Send inquiry')"
+INQUIRY_BUTTON = "[data-testid='customizationSkuSummary-INQUIRY']"
 WHOLESALE_INDICATOR = "button:has-text('Start order')"
 INQUIRY_IFRAME = ".alitalk-dialog-iframe"
 INQUIRY_TEXTAREA = ".content-input"
