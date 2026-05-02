@@ -117,33 +117,30 @@ class WholesaleProductError(Exception):
     """Product page is wholesale-only — no inquiry form available."""
 
 
-LOGIN_RETRIES = 2
-
-
 def login_alibaba(page: Page, session_url: str = "") -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
-    for attempt in range(1 + LOGIN_RETRIES):
-        try:
-            page.goto("https://login.alibaba.com/")
-
-            with page.expect_popup() as popup_info:
-                page.locator("#google a").click()
-            popup = popup_info.value
-
-            google_login(popup, session_url=session_url)
-
-            page.wait_for_url("**alibaba.com**", timeout=30_000)
-            page.wait_for_timeout(2_000)
-            log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
-            return
-        except Exception:
-            if attempt < LOGIN_RETRIES:
-                log.warning(
-                    "Alibaba login failed, retrying (%d/%d)",
-                    attempt + 1, LOGIN_RETRIES,
-                )
-                continue
+    try:
+        page.goto("https://login.alibaba.com/")
+    except PlaywrightError as exc:
+        # Alibaba login page redirects; Playwright raises but the page is fine
+        if "interrupted by another navigation" not in str(exc):
             raise
+        log.info("Login page redirected (expected): %s", page.url)
+
+    log.info("Login page loaded, URL: %s", page.url)
+
+    with page.expect_popup() as popup_info:
+        page.locator("#google a").click()
+    popup = popup_info.value
+    log.info("Google popup opened: %s", popup.url)
+
+    google_login(popup, session_url=session_url)
+    log.info("Google login returned, main page URL: %s", page.url)
+
+    page.wait_for_url("**alibaba.com**", timeout=30_000)
+    log.info("URL after wait: %s", page.url)
+    page.wait_for_timeout(2_000)
+    log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
 
 
 def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
