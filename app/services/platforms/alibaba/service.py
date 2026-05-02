@@ -117,19 +117,33 @@ class WholesaleProductError(Exception):
     """Product page is wholesale-only — no inquiry form available."""
 
 
+LOGIN_RETRIES = 2
+
+
 def login_alibaba(page: Page, session_url: str = "") -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
-    page.goto("https://login.alibaba.com/")
+    for attempt in range(1 + LOGIN_RETRIES):
+        try:
+            page.goto("https://login.alibaba.com/")
 
-    with page.expect_popup() as popup_info:
-        page.locator("#google a").click()
-    popup = popup_info.value
+            with page.expect_popup() as popup_info:
+                page.locator("#google a").click()
+            popup = popup_info.value
 
-    google_login(popup, session_url=session_url)
+            google_login(popup, session_url=session_url)
 
-    page.wait_for_url("**alibaba.com**", timeout=30_000)
-    page.wait_for_timeout(2_000)
-    log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
+            page.wait_for_url("**alibaba.com**", timeout=30_000)
+            page.wait_for_timeout(2_000)
+            log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
+            return
+        except Exception:
+            if attempt < LOGIN_RETRIES:
+                log.warning(
+                    "Alibaba login failed, retrying (%d/%d)",
+                    attempt + 1, LOGIN_RETRIES,
+                )
+                continue
+            raise
 
 
 def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
