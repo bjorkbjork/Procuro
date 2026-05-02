@@ -99,7 +99,6 @@ CHALLENGE_TIMEOUT = 300
 TOTP_INPUT_SELECTORS = [
     "input[name='totpPin']",
     "input#totpPin",
-    "input[type='tel']",
 ]
 
 CHALLENGE_URL_MARKER = "accounts.google.com/v3/signin/challenge"
@@ -131,17 +130,25 @@ def _try_totp(page: Page) -> bool:
     return False
 
 
+CHALLENGE_HEADINGS = ["verify it", "2-step verification", "confirm your identity"]
+
+
 def _get_challenge_description(page: Page) -> str:
-    """Extract a human-readable description of the current challenge."""
+    """Extract the challenge heading (e.g. 'Verify it's you')."""
     try:
-        visible = page.inner_text("body")
-        for line in visible.splitlines():
-            stripped = line.strip()
-            if len(stripped) > 10:
-                return stripped
+        for tag in ["h1", "h2", "[role='heading']"]:
+            el = page.locator(tag)
+            for i in range(el.count()):
+                text = el.nth(i).text_content().strip()
+                if text and any(m in text.lower() for m in CHALLENGE_HEADINGS):
+                    return text
+        visible = page.inner_text("body").lower()
+        for marker in CHALLENGE_HEADINGS:
+            if marker in visible:
+                return marker.title()
     except Exception:
         pass
-    return "Unknown challenge"
+    return "Unknown auth challenge"
 
 
 def _handle_auth_challenges(page: Page, session_url: str) -> None:
@@ -151,6 +158,7 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
     the maintainer a live session link for manual resolution.
     """
     alerted = False
+    totp_attempted = False
 
     deadline = time.monotonic() + CHALLENGE_TIMEOUT
     while time.monotonic() < deadline:
@@ -165,7 +173,8 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
                 log.info("Auth challenge cleared")
             return
 
-        if _try_totp(page):
+        if not totp_attempted and _try_totp(page):
+            totp_attempted = True
             continue
 
         if not alerted:
@@ -175,7 +184,7 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
             gmail = GmailService()
             gmail.send_email(
                 to=settings.MAINTAINER_EMAIL_ADDRESS,
-                subject="[Google Auth] Challenge requires manual action",
+                subject=f"[Google Auth] {description}",
                 body=(
                     f"Google is blocking login with a challenge:\n\n"
                     f"  {description}\n\n"
