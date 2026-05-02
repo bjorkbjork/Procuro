@@ -1,13 +1,16 @@
 """Stage 3: Send initial outreach to suppliers via platform inquiry forms.
 
 For each SupplierThread in state NEW, builds a message from the outreach
-template and submits it through the platform's inquiry form. Updates
-thread state to OUTREACH_SENT and logs the message."""
+template and submits it through the platform's inquiry form. Runs the full
+deterministic Playwright flow first (threaded, with auth context). Any
+threads that fail are retried via the LLM inquiry agent with the same
+auth context."""
 
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.agent.inquiry_agent import InquiryStatus, send_inquiry_via_agent
 from app.base.config import settings
 from app.db.database import SessionLocal
 from app.db.models.message import Message
@@ -81,6 +84,19 @@ def _get_threads_by_platform() -> dict[str, list[dict]]:
     return grouped
 
 
+def _record_success(thread_id: int, message: str) -> None:
+    with SessionLocal() as session:
+        thread = session.get(SupplierThread, thread_id)
+        thread.state = "OUTREACH_SENT"
+        session.add(Message(
+            thread_id=thread_id,
+            direction="outbound",
+            subject="Initial outreach",
+            body=message,
+        ))
+        session.commit()
+
+
 def _send_single_inquiry(
     platform: SupplierPlatform, thread_id: int, product_url: str, message: str,
     context_id: str, thread_name: str = "",
@@ -112,24 +128,46 @@ def _send_single_inquiry(
             return False
 
         if not success:
-            session.rollback()
             log.warning(
                 "Inquiry not confirmed for thread %d (%s)",
                 thread_id, product_url,
             )
             return False
 
-        thread = session.get(SupplierThread, thread_id)
-        thread.state = "OUTREACH_SENT"
-        session.add(Message(
-            thread_id=thread_id,
-            direction="outbound",
-            subject="Initial outreach",
-            body=message,
-        ))
-        session.commit()
-
+    _record_success(thread_id, message)
     log.info("Outreach sent for thread %d (%s)", thread_id, product_url)
+    return True
+
+
+def _retry_with_agent(
+    thread_id: int, product_url: str, message: str,
+    context_id: str,
+) -> bool:
+    """Retry a failed inquiry using the LLM agent with Browserbase MCP."""
+    log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
+    try:
+        result = send_inquiry_via_agent(product_url, message, context_id)
+    except Exception:
+        log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
+        return False
+
+    if result.status == InquiryStatus.WHOLESALE:
+        with SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_id)
+            thread.state = "UNPROCESSABLE"
+            session.commit()
+        log.info("Agent: thread %d is wholesale-only (%s)", thread_id, product_url)
+        return False
+
+    if result.status == InquiryStatus.FAILED:
+        log.warning(
+            "Agent retry failed for thread %d (%s): %s",
+            thread_id, product_url, result.reason,
+        )
+        return False
+
+    _record_success(thread_id, message)
+    log.info("Agent retry succeeded for thread %d (%s)", thread_id, product_url)
     return True
 
 
@@ -156,6 +194,8 @@ def send_outreach() -> int:
             platform.login(browser.page, session_url=browser.live_url or "")
         log.info("Auth context saved — spawning %d workers", len(thread_infos))
 
+        # Pass 1: deterministic Playwright flow (threaded)
+        failed: list[dict] = []
         futures = {}
         with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
             for info in thread_infos:
@@ -166,10 +206,28 @@ def send_outreach() -> int:
                     platform, info["thread_id"], info["product_url"], message,
                     context_id=context_id, thread_name=slug,
                 )
-                futures[future] = info["thread_id"]
+                futures[future] = {**info, "message": message}
 
             for future in as_completed(futures):
+                info = futures[future]
                 if future.result():
+                    sent_count += 1
+                else:
+                    with SessionLocal() as session:
+                        thread = session.get(SupplierThread, info["thread_id"])
+                        if thread.state == "NEW":
+                            failed.append(info)
+
+        # Pass 2: retry failures with LLM agent (sequential)
+        if failed:
+            log.info(
+                "Retrying %d failed inquiries with LLM agent", len(failed),
+            )
+            for info in failed:
+                if _retry_with_agent(
+                    info["thread_id"], info["product_url"], info["message"],
+                    context_id=context_id,
+                ):
                     sent_count += 1
 
     log.info("Stage 3 complete: %d inquiries sent", sent_count)
