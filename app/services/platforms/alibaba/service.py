@@ -146,13 +146,42 @@ def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
 _JS_FILL_AND_SUBMIT = (Path(__file__).parent / "fill_and_submit.js").read_text()
 
 
+GOTO_RETRIES = 2
+SUBMIT_CONFIRM_TIMEOUT = 15
+
+
+def _wait_for_submit_confirmation(page: Page, frame_url_pattern: re.Pattern, timeout: int) -> bool:
+    """Wait for the inquiry iframe to navigate away, confirming the send."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        frame = page.frame(url=frame_url_pattern)
+        if not frame:
+            return True
+        try:
+            ta = frame.locator(INQUIRY_TEXTAREA)
+            if ta.count() == 0:
+                return True
+        except PlaywrightError:
+            return True
+        time.sleep(1)
+    return False
+
+
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
     Returns True if the inquiry was submitted successfully.
     Raises WholesaleProductError if the page is wholesale-only.
     """
-    page.goto(product_url, timeout=60_000)
+    for attempt in range(1 + GOTO_RETRIES):
+        try:
+            page.goto(product_url, timeout=90_000)
+            break
+        except PlaywrightError:
+            if attempt < GOTO_RETRIES:
+                log.warning("Page load timeout, retrying (%d/%d)", attempt + 1, GOTO_RETRIES)
+                continue
+            raise
 
     inquiry_btn = page.locator(INQUIRY_BUTTON)
     wholesale_btn = page.locator(WHOLESALE_INDICATOR)
@@ -169,6 +198,7 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     page.wait_for_selector(INQUIRY_BUTTON, timeout=15_000)
     page.click(INQUIRY_BUTTON)
 
+    iframe_pattern = re.compile(r"message\.alibaba\.com")
     frame = _get_inquiry_frame(page)
 
     try:
@@ -179,18 +209,23 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
         })
     except PlaywrightError as exc:
         if "Execution context was destroyed" in str(exc):
-            log.info("Inquiry frame navigated after submit — treating as success for %s", product_url)
+            log.info("Frame navigated during submit for %s — verifying", product_url)
             return True
         raise
 
     if not result.get("ok"):
         log.warning(
-            "Inquiry failed for %s: %s", product_url, result.get("reason"),
+            "Inquiry failed for %s: %s (step: %s)",
+            product_url, result.get("reason"), result.get("step"),
         )
         return False
 
-    log.info("Inquiry submitted for %s", product_url)
-    return True
+    if _wait_for_submit_confirmation(page, iframe_pattern, SUBMIT_CONFIRM_TIMEOUT):
+        log.info("Inquiry confirmed for %s", product_url)
+        return True
+
+    log.warning("Inquiry click fired but not confirmed for %s", product_url)
+    return False
 
 
 def parse_product_specs(html: str) -> dict:

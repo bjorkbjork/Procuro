@@ -4,7 +4,7 @@
             const ta = document.querySelector(config.textareaSel);
             if (!ta) {
                 if (tries > 0) return setTimeout(() => poll(tries - 1), 500);
-                return resolve({ok: false, reason: "textarea_not_found"});
+                return resolve({ok: false, step: "fill", reason: "textarea_not_found"});
             }
 
             const nativeSetter = Object.getOwnPropertyDescriptor(
@@ -18,25 +18,14 @@
                 const btn = document.querySelector(config.submitSel);
                 if (!btn) {
                     if (btnTries > 0) return setTimeout(() => waitBtn(btnTries - 1), 500);
-                    return resolve({ok: false, reason: "submit_not_found"});
+                    return resolve({ok: false, step: "click", reason: "submit_not_found"});
                 }
                 if (btn.disabled) {
                     if (btnTries > 0) return setTimeout(() => waitBtn(btnTries - 1), 500);
-                    return resolve({ok: false, reason: "submit_stayed_disabled"});
+                    return resolve({ok: false, step: "click", reason: "submit_stayed_disabled"});
                 }
-
-                const bodyBefore = document.body.innerHTML.length;
                 btn.click();
-
-                const checkDone = (doneTries) => {
-                    const bodyAfter = document.body.innerHTML.length;
-                    const ta2 = document.querySelector(config.textareaSel);
-                    if (!ta2 || ta2.value !== config.message || Math.abs(bodyAfter - bodyBefore) > 200)
-                        return resolve({ok: true});
-                    if (doneTries > 0) return setTimeout(() => checkDone(doneTries - 1), 500);
-                    resolve({ok: false, reason: "form_unchanged"});
-                };
-                setTimeout(() => checkDone(20), 1000);
+                resolve({ok: true, step: "clicked"});
             };
             setTimeout(() => waitBtn(10), 1000);
         };
