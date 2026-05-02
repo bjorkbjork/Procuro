@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import Page
+from playwright.sync_api import Error as PlaywrightError, Page
 
 from app.base.config import settings
 from app.services.google_auth import google_login
@@ -106,21 +106,26 @@ def search_suppliers(
     return results
 
 
-INQUIRY_BUTTON = "[data-testid='customizationSkuSummary-INQUIRY']"
+INQUIRY_BUTTON = "button:has-text('Send inquiry')"
+WHOLESALE_INDICATOR = "button:has-text('Start order')"
 INQUIRY_IFRAME = ".alitalk-dialog-iframe"
 INQUIRY_TEXTAREA = ".content-input"
 INQUIRY_SUBMIT = "button.next-btn-primary"
 
 
-def login_alibaba(page: Page) -> None:
+class WholesaleProductError(Exception):
+    """Product page is wholesale-only — no inquiry form available."""
+
+
+def login_alibaba(page: Page, session_url: str = "") -> None:
     """Log into Alibaba via Google OAuth using the shared Gmail credentials."""
-    page.goto("https://login.alibaba.com/", wait_until="networkidle")
+    page.goto("https://login.alibaba.com/", wait_until="domcontentloaded")
 
     with page.expect_popup() as popup_info:
         page.locator("#google a").click()
     popup = popup_info.value
 
-    google_login(popup)
+    google_login(popup, session_url=session_url)
 
     page.wait_for_url("**alibaba.com**", timeout=30_000)
     page.wait_for_timeout(2_000)
@@ -145,18 +150,38 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     """Submit an inquiry via the Alibaba product page inquiry modal.
 
     Returns True if the inquiry was submitted successfully.
+    Raises WholesaleProductError if the page is wholesale-only.
     """
     page.goto(product_url, timeout=60_000)
+
+    inquiry_btn = page.locator(INQUIRY_BUTTON)
+    wholesale_btn = page.locator(WHOLESALE_INDICATOR)
+    try:
+        page.wait_for_selector(
+            f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=15_000,
+        )
+    except Exception:
+        pass
+
+    if wholesale_btn.count() > 0 and inquiry_btn.count() == 0:
+        raise WholesaleProductError(product_url)
+
     page.wait_for_selector(INQUIRY_BUTTON, timeout=15_000)
     page.click(INQUIRY_BUTTON)
 
     frame = _get_inquiry_frame(page)
 
-    result = frame.evaluate(_JS_FILL_AND_SUBMIT, {
-        "textareaSel": INQUIRY_TEXTAREA,
-        "submitSel": INQUIRY_SUBMIT,
-        "message": message,
-    })
+    try:
+        result = frame.evaluate(_JS_FILL_AND_SUBMIT, {
+            "textareaSel": INQUIRY_TEXTAREA,
+            "submitSel": INQUIRY_SUBMIT,
+            "message": message,
+        })
+    except PlaywrightError as exc:
+        if "Execution context was destroyed" in str(exc):
+            log.info("Inquiry frame navigated after submit — treating as success for %s", product_url)
+            return True
+        raise
 
     if not result.get("ok"):
         log.warning(
