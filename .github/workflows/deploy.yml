@@ -32,7 +32,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "app,alembic,alembic.ini,pyproject.toml,pdm.lock,package.json,package-lock.json,Dockerfile,docker-compose.yml,entrypoint.sh,scripts"
+          source: "app,alembic,alembic.ini,pyproject.toml,uv.lock,package.json,package-lock.json,Dockerfile,.dockerignore,docker-compose.yml,entrypoint.sh,scripts"
           target: ~/sourcingAgent
           rm: true
 
