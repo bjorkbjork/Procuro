@@ -8,10 +8,15 @@ on:
         required: true
         type: environment
 
+env:
+  IMAGE: ghcr.io/bjorkbjork/sourcing-agent
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    permissions:
+      packages: write
+      contents: read
     steps:
       - name: Checkout latest tag
         uses: actions/checkout@v4
@@ -26,17 +31,21 @@ jobs:
           echo "Deploying $TAG"
           git checkout "$TAG"
 
-      - name: Copy to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "app,alembic,alembic.ini,pyproject.toml,uv.lock,package.json,package-lock.json,Dockerfile,.dockerignore,docker-compose.yml,entrypoint.sh,scripts"
-          target: ~/sourcingAgent
-          rm: true
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Write .env and deploy
+      - name: Build and push
+        run: |
+          docker build -t $IMAGE:${{ steps.tag.outputs.tag }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ steps.tag.outputs.tag }}
+          docker push $IMAGE:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1
         env:
           GMAIL_ACCOUNT: ${{ secrets.GMAIL_ACCOUNT }}
@@ -75,6 +84,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GMAIL_ACCOUNT,GMAIL_PASSWORD,BEDROCK_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,LOGFIRE_TOKEN,MAINTAINER_EMAIL_ADDRESS,MAX_WORKERS,GOOGLE_TOTP_SECRET,PG_USER,PG_PASSWORD,PG_HOST,PG_PORT,DB_NAME,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_PROJECT_ID,GOOGLE_AUTH_URI,GOOGLE_TOKEN_URI,GOOGLE_AUTH_PROVIDER_X509_CERT_URL,GOOGLE_REFRESH_TOKEN,GOOGLE_SHEET_ID,BROWSERBASE_API_KEY,BROWSERBASE_PROJECT_ID,TWOCAPTCHA_API_KEY,CHEAP,MODERATE,EXPENSIVE,SOURCING_INTERVAL_MINUTES,NEGOTIATION_INTERVAL_MINUTES
           script: |
+            mkdir -p ~/sourcingAgent
             cd ~/sourcingAgent
 
             > .env
@@ -109,6 +119,35 @@ jobs:
             [ -n "$SOURCING_INTERVAL_MINUTES" ] && echo "SOURCING_INTERVAL_MINUTES=$SOURCING_INTERVAL_MINUTES" >> .env
             [ -n "$NEGOTIATION_INTERVAL_MINUTES" ] && echo "NEGOTIATION_INTERVAL_MINUTES=$NEGOTIATION_INTERVAL_MINUTES" >> .env
 
-            sudo docker compose down
-            sudo docker compose build --no-cache
+            cat > docker-compose.yml <<'COMPOSEEOF'
+services:
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${PG_USER:-sourcing_agent}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-sourcingAgentDb}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-sourcing_agent} -d ${DB_NAME:-sourcingAgentDb}"]
+      interval: 5s
+      retries: 5
+  app:
+    image: ghcr.io/bjorkbjork/sourcing-agent:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      PG_HOST: db
+    restart: always
+volumes:
+  pgdata:
+COMPOSEEOF
+
+            sudo docker compose pull app
             sudo docker compose up -d
