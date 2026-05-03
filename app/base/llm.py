@@ -26,11 +26,15 @@ from pydantic_ai.messages import BinaryContent
 from pydantic_ai.models import ModelRequestParameters, ModelSettings, StreamedResponse
 from botocore.config import Config
 from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
+from dataclasses import replace as dc_replace
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
     ModelResponse,
+    TextPart,
+    ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.providers.bedrock import BedrockProvider
@@ -80,6 +84,71 @@ def get_single_model(model_id: str) -> BedrockConverseModel:
 # ---------------------------------------------------------------------------
 # Rate-limit-aware model rotation
 # ---------------------------------------------------------------------------
+
+
+_SUPPORTS_TOOL_IMAGES = {"anthropic"}
+
+
+def _needs_image_rewrite(model_name: str) -> bool:
+    return not any(f in model_name for f in _SUPPORTS_TOOL_IMAGES)
+
+
+def _rewrite_image_tool_returns(
+    messages: list[ModelMessage],
+) -> list[ModelMessage]:
+    """Replace image tool call/return pairs with plain assistant/user messages.
+
+    Bedrock Converse rejects images in toolResult blocks for non-Anthropic
+    models. This removes the tool framing entirely so the model sees
+    the image as a normal user message.
+    """
+    # Collect tool_call_ids whose returns carry BinaryContent
+    image_ids: dict[str, BinaryContent] = {}
+    for msg in messages:
+        if not isinstance(msg, ModelRequest):
+            continue
+        for part in msg.parts:
+            if (
+                isinstance(part, ToolReturnPart)
+                and isinstance(part.content, BinaryContent)
+                and part.tool_call_id
+            ):
+                image_ids[part.tool_call_id] = part.content
+
+    if not image_ids:
+        return messages
+
+    result: list[ModelMessage] = []
+    for msg in messages:
+        if isinstance(msg, ModelResponse):
+            new_parts = []
+            for part in msg.parts:
+                if isinstance(part, ToolCallPart) and part.tool_call_id in image_ids:
+                    new_parts.append(TextPart(f"I'll call {part.tool_name} now."))
+                else:
+                    new_parts.append(part)
+            result.append(dc_replace(msg, parts=new_parts))
+
+        elif isinstance(msg, ModelRequest):
+            new_parts = []
+            for part in msg.parts:
+                if isinstance(part, ToolReturnPart) and part.tool_call_id in image_ids:
+                    new_parts.append(
+                        UserPromptPart(
+                            content=[
+                                f"Result from {part.tool_name}:",
+                                image_ids[part.tool_call_id],
+                            ]
+                        )
+                    )
+                else:
+                    new_parts.append(part)
+            result.append(dc_replace(msg, parts=new_parts))
+
+        else:
+            result.append(msg)
+
+    return result
 
 
 class RotatingModel(BedrockConverseModel):
@@ -136,6 +205,13 @@ class RotatingModel(BedrockConverseModel):
             now = time.monotonic()
             ts[:] = [now] * rpm
 
+    def _prepare_messages(
+        self, model: BedrockConverseModel, messages: list[ModelMessage]
+    ) -> list[ModelMessage]:
+        if _needs_image_rewrite(model.model_name):
+            return _rewrite_image_tool_returns(messages)
+        return messages
+
     async def request(
         self,
         messages: list[ModelMessage],
@@ -147,9 +223,10 @@ class RotatingModel(BedrockConverseModel):
         while len(tried) < len(self._pool):
             model = self._pick_model()
             tried.add(model.model_name)
+            msgs = self._prepare_messages(model, messages)
             try:
                 response = await model.request(
-                    messages, model_settings_arg, model_request_parameters
+                    msgs, model_settings_arg, model_request_parameters
                 )
                 log.debug("Request served by %s", model.model_name)
                 return response
@@ -162,9 +239,8 @@ class RotatingModel(BedrockConverseModel):
         # All models 429'd — wait and retry on the first that frees up
         log.warning("All models returned 429, waiting for capacity")
         model = self._pick_model()
-        return await model.request(
-            messages, model_settings_arg, model_request_parameters
-        )
+        msgs = self._prepare_messages(model, messages)
+        return await model.request(msgs, model_settings_arg, model_request_parameters)
 
     @asynccontextmanager
     async def request_stream(
@@ -175,9 +251,10 @@ class RotatingModel(BedrockConverseModel):
         run_context: Any = None,
     ) -> AsyncIterator[StreamedResponse]:
         model = self._pick_model()
+        msgs = self._prepare_messages(model, messages)
         try:
             async with model.request_stream(
-                messages, model_settings_arg, model_request_parameters, run_context
+                msgs, model_settings_arg, model_request_parameters, run_context
             ) as stream:
                 yield stream
         except ModelHTTPError as e:
@@ -186,8 +263,9 @@ class RotatingModel(BedrockConverseModel):
             log.warning("429 from %s during stream, rotating", model.model_name)
             self._mark_exhausted(model)
             fallback = self._pick_model()
+            msgs = self._prepare_messages(fallback, messages)
             async with fallback.request_stream(
-                messages, model_settings_arg, model_request_parameters, run_context
+                msgs, model_settings_arg, model_request_parameters, run_context
             ) as stream:
                 yield stream
 
