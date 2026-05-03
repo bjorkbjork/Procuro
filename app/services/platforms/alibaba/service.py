@@ -61,9 +61,7 @@ def search_suppliers(
     if attributes:
         params["attributes"] = attributes
 
-    resp = requests.get(
-        BASE_URL, params=params, headers=DEFAULT_HEADERS, timeout=15
-    )
+    resp = requests.get(BASE_URL, params=params, headers=DEFAULT_HEADERS, timeout=15)
     resp.raise_for_status()
     data = resp.json()
 
@@ -82,27 +80,31 @@ def search_suppliers(
             if icon.get("name")
         ]
 
-        results.append({
-            "product_id": offer.get("productId"),
-            "product_url": _normalize_url(offer.get("productUrl", "")),
-            "title": _strip_html(offer.get("title", "")),
-            "price": offer.get("price", ""),
-            "moq": offer.get("moq", ""),
-            "company_name": offer.get("companyName", ""),
-            "company_id": offer.get("companyId", ""),
-            "profile_url": _normalize_url(offer.get("supplierHref", "")),
-            "home_url": _normalize_url(offer.get("supplierHomeHref", "")),
-            "country": offer.get("countryCode", ""),
-            "years_on_platform": offer.get("goldSupplierYears", ""),
-            "review_score": offer.get("reviewScore", ""),
-            "review_count": offer.get("reviewCount", ""),
-            "certifications": certs,
-            "sold_count": offer.get("soldOrder", ""),
-        })
+        results.append(
+            {
+                "product_id": offer.get("productId"),
+                "product_url": _normalize_url(offer.get("productUrl", "")),
+                "title": _strip_html(offer.get("title", "")),
+                "price": offer.get("price", ""),
+                "moq": offer.get("moq", ""),
+                "company_name": offer.get("companyName", ""),
+                "company_id": offer.get("companyId", ""),
+                "profile_url": _normalize_url(offer.get("supplierHref", "")),
+                "home_url": _normalize_url(offer.get("supplierHomeHref", "")),
+                "country": offer.get("countryCode", ""),
+                "years_on_platform": offer.get("goldSupplierYears", ""),
+                "review_score": offer.get("reviewScore", ""),
+                "review_count": offer.get("reviewCount", ""),
+                "certifications": certs,
+                "sold_count": offer.get("soldOrder", ""),
+            }
+        )
 
     log.info(
         "Alibaba search returned %d results for '%s' (page %d)",
-        len(results), query, page,
+        len(results),
+        query,
+        page,
     )
     return results
 
@@ -162,7 +164,9 @@ PAGE_LOAD_TIMEOUT = 300_000
 SUBMIT_CONFIRM_TIMEOUT = 15
 
 
-def _wait_for_submit_confirmation(page: Page, frame_url_pattern: re.Pattern, timeout: int) -> bool:
+def _wait_for_submit_confirmation(
+    page: Page, frame_url_pattern: re.Pattern, timeout: int
+) -> bool:
     """Wait for the inquiry iframe to navigate away, confirming the send."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -184,7 +188,8 @@ def _load_product_page(page: Page, product_url: str) -> None:
     """Navigate to product page and wait for actionable content, with retries."""
     page.goto(product_url, timeout=PAGE_LOAD_TIMEOUT)
     page.wait_for_selector(
-        f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=PAGE_LOAD_TIMEOUT,
+        f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}",
+        timeout=PAGE_LOAD_TIMEOUT,
     )
 
 
@@ -208,11 +213,14 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     frame = _get_inquiry_frame(page)
 
     try:
-        result = frame.evaluate(_JS_FILL_AND_SUBMIT, {
-            "textareaSel": INQUIRY_TEXTAREA,
-            "submitSel": INQUIRY_SUBMIT,
-            "message": message,
-        })
+        result = frame.evaluate(
+            _JS_FILL_AND_SUBMIT,
+            {
+                "textareaSel": INQUIRY_TEXTAREA,
+                "submitSel": INQUIRY_SUBMIT,
+                "message": message,
+            },
+        )
     except PlaywrightError as exc:
         if "Execution context was destroyed" in str(exc):
             log.info("Frame navigated during submit for %s — verifying", product_url)
@@ -222,7 +230,9 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
     if not result.get("ok"):
         log.warning(
             "Inquiry failed for %s: %s (step: %s)",
-            product_url, result.get("reason"), result.get("step"),
+            product_url,
+            result.get("reason"),
+            result.get("step"),
         )
         return False
 
@@ -270,5 +280,3 @@ def parse_product_title(html: str) -> str:
     # Alibaba titles end with " - Buy <keywords> Product on Alibaba.com"
     raw = raw.split(" - Buy ")[0].strip()
     return raw
-
-

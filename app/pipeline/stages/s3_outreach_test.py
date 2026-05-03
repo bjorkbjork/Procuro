@@ -11,7 +11,11 @@ from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-from app.pipeline.stages.s3_outreach import _build_message, _format_spec_block, send_outreach
+from app.pipeline.stages.s3_outreach import (
+    _build_message,
+    _format_spec_block,
+    send_outreach,
+)
 
 TEST_SPECS = {
     "Display": {"Screen Size": '75"', "Screen Type": "QLED"},

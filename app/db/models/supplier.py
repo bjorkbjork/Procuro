@@ -1,4 +1,13 @@
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 
 from app.db.database import Base
 from app.db.models.enums import Platform

@@ -6,7 +6,10 @@ from app.base.config import PROJECT_ROOT
 from app.services.sources.kogan.service import parse_specs, parse_title, slug_from_url
 
 FIXTURES_DIR = PROJECT_ROOT / "html_test_fixtures"
-FIXTURE_PATH = FIXTURES_DIR / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+FIXTURE_PATH = (
+    FIXTURES_DIR
+    / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +41,7 @@ class TestParseSpecs:
     def test_has_display_group(self, html):
         specs = parse_specs(html)
         assert "Display" in specs
-        assert "Screen Size (\")" in specs["Display"]
+        assert 'Screen Size (")' in specs["Display"]
         assert specs["Display"]["Screen Type"] == "QLED"
 
     def test_has_connectivity_group(self, html):

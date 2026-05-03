@@ -41,7 +41,9 @@ def _is_manufacturer(specs: dict) -> bool:
             continue
         if any(kw in supplier_type for kw in MANUFACTURER_KEYWORDS):
             return True
-        log.info("Supplier type '%s' did not match manufacturer keywords", supplier_type)
+        log.info(
+            "Supplier type '%s' did not match manufacturer keywords", supplier_type
+        )
         return False
     return True
 
@@ -62,9 +64,13 @@ def _fetch_product_specs(page, platform: SupplierPlatform, product_url: str) -> 
 
 
 def _upsert_supplier(session, offer: dict, platform: SupplierPlatform) -> Supplier:
-    supplier = session.query(Supplier).filter_by(
-        profile_url=offer["profile_url"],
-    ).first()
+    supplier = (
+        session.query(Supplier)
+        .filter_by(
+            profile_url=offer["profile_url"],
+        )
+        .first()
+    )
     if supplier:
         return supplier
     supplier = Supplier(
@@ -79,7 +85,9 @@ def _upsert_supplier(session, offer: dict, platform: SupplierPlatform) -> Suppli
 
 
 def _fetch_and_save_offer(
-    source_product_id: int, offer: dict, platform: SupplierPlatform,
+    source_product_id: int,
+    offer: dict,
+    platform: SupplierPlatform,
     thread_name: str = "",
 ) -> SupplierProduct | None:
     """Fetch specs for a single offer in its own browser session. Returns the
@@ -89,9 +97,13 @@ def _fetch_and_save_offer(
     product_url = offer["product_url"]
 
     with SessionLocal() as session:
-        existing = session.query(SupplierProduct).filter_by(
-            product_url=product_url,
-        ).first()
+        existing = (
+            session.query(SupplierProduct)
+            .filter_by(
+                product_url=product_url,
+            )
+            .first()
+        )
         if existing:
             log.info("Already extracted %s — skipping", product_url)
             return existing
@@ -131,7 +143,8 @@ def _fetch_and_save_offer(
 
 
 def search_and_extract(
-    source_product_id: int, queries: list[str] | None = None,
+    source_product_id: int,
+    queries: list[str] | None = None,
 ) -> list[SupplierProduct]:
     """Phase 1: Search all platforms, scrape product pages, persist supplier products.
 
@@ -145,7 +158,9 @@ def search_and_extract(
         specs = source.specs
 
     if not specs:
-        raise ValueError(f"SourceProduct {source_product_id} has no specs — run Stage 1 first")
+        raise ValueError(
+            f"SourceProduct {source_product_id} has no specs — run Stage 1 first"
+        )
 
     if queries is None:
         queries = generate_search_queries(title, specs)
@@ -166,7 +181,9 @@ def search_and_extract(
 
         log.info(
             "Found %d unique offers on %s for '%s'",
-            len(offers), platform.platform.value, title,
+            len(offers),
+            platform.platform.value,
+            title,
         )
         if not offers:
             continue
@@ -177,7 +194,9 @@ def search_and_extract(
                 slug = platform.url_slug(offer["product_url"])
                 future = pool.submit(
                     _fetch_and_save_offer,
-                    source_product_id, offer, platform,
+                    source_product_id,
+                    offer,
+                    platform,
                     thread_name=slug,
                 )
                 futures[future] = offer["product_url"]
@@ -219,21 +238,28 @@ def _match_single_candidate(
     if not is_match or confidence < MATCH_CONFIDENCE_THRESHOLD:
         log.info(
             "No match '%s': confidence=%.2f reason=%s diffs=%s",
-            candidate.title[:60], confidence,
-            result.reasoning, result.key_differences,
+            candidate.title[:60],
+            confidence,
+            result.reasoning,
+            result.key_differences,
         )
         return None
 
     log.info(
         "Matched '%s': confidence=%.2f",
-        candidate.title[:60], confidence,
+        candidate.title[:60],
+        confidence,
     )
 
     with SessionLocal() as session:
-        existing = session.query(SupplierThread).filter_by(
-            source_product_id=source_product_id,
-            supplier_product_id=candidate.id,
-        ).first()
+        existing = (
+            session.query(SupplierThread)
+            .filter_by(
+                source_product_id=source_product_id,
+                supplier_product_id=candidate.id,
+            )
+            .first()
+        )
         if existing:
             return existing
 
@@ -250,7 +276,8 @@ def _match_single_candidate(
 
 
 def match_candidates(
-    source_product_id: int, match_all: bool = False,
+    source_product_id: int,
+    match_all: bool = False,
 ) -> list[SupplierThread]:
     """Phase 2: Fuzzy-match each supplier product against the source product.
 
@@ -263,9 +290,13 @@ def match_candidates(
         title = source.title
         specs = source.specs
 
-        candidates = session.query(SupplierProduct).filter_by(
-            source_product_id=source_product_id,
-        ).all()
+        candidates = (
+            session.query(SupplierProduct)
+            .filter_by(
+                source_product_id=source_product_id,
+            )
+            .all()
+        )
 
     if not candidates:
         log.info("No supplier products to match for '%s'", title)
@@ -279,7 +310,11 @@ def match_candidates(
         for candidate in candidates:
             future = pool.submit(
                 _match_single_candidate,
-                candidate, source_product_id, title, specs, match_all,
+                candidate,
+                source_product_id,
+                title,
+                specs,
+                match_all,
             )
             futures[future] = candidate.id
 
@@ -305,9 +340,13 @@ def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
             return threads
 
         with SessionLocal() as session:
-            total_candidates = session.query(SupplierProduct).filter_by(
-                source_product_id=source_product_id,
-            ).count()
+            total_candidates = (
+                session.query(SupplierProduct)
+                .filter_by(
+                    source_product_id=source_product_id,
+                )
+                .count()
+            )
 
         if total_candidates >= MAX_CANDIDATES:
             log.warning(
@@ -318,5 +357,6 @@ def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
 
         log.info(
             "No matches after attempt %d (%d candidates so far) — retrying with new queries",
-            attempt, total_candidates,
+            attempt,
+            total_candidates,
         )

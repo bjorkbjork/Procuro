@@ -32,12 +32,20 @@ class SupplierThread(Base):
             f"state IN ({', '.join(repr(s) for s in VALID_STATES)})",
             name="check_state",
         ),
-        UniqueConstraint("source_product_id", "supplier_product_id", name="uq_source_supplier_product"),
+        UniqueConstraint(
+            "source_product_id",
+            "supplier_product_id",
+            name="uq_source_supplier_product",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
-    source_product_id = Column(Integer, ForeignKey("source_products.id"), nullable=False)
-    supplier_product_id = Column(Integer, ForeignKey("supplier_products.id"), nullable=False)
+    source_product_id = Column(
+        Integer, ForeignKey("source_products.id"), nullable=False
+    )
+    supplier_product_id = Column(
+        Integer, ForeignKey("supplier_products.id"), nullable=False
+    )
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
     state = Column(String, nullable=False, default="NEW")
     gmail_thread_id = Column(String, nullable=True)

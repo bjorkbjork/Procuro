@@ -69,21 +69,19 @@ def _build_message(source_product: SourceProduct) -> str:
 def _get_threads_by_platform() -> dict[str, list[dict]]:
     """Load NEW threads grouped by platform, with related objects."""
     with SessionLocal() as session:
-        threads = (
-            session.query(SupplierThread)
-            .filter_by(state="NEW")
-            .all()
-        )
+        threads = session.query(SupplierThread).filter_by(state="NEW").all()
         grouped: dict[str, list[dict]] = {}
         for thread in threads:
             sp = session.get(SupplierProduct, thread.supplier_product_id)
             source = session.get(SourceProduct, thread.source_product_id)
             platform_name = sp.platform
-            grouped.setdefault(platform_name, []).append({
-                "thread_id": thread.id,
-                "product_url": sp.product_url,
-                "source_product": source,
-            })
+            grouped.setdefault(platform_name, []).append(
+                {
+                    "thread_id": thread.id,
+                    "product_url": sp.product_url,
+                    "source_product": source,
+                }
+            )
     return grouped
 
 
@@ -91,12 +89,14 @@ def _record_success(thread_id: int, message: str) -> None:
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         thread.state = "OUTREACH_SENT"
-        session.add(Message(
-            thread_id=thread_id,
-            direction="outbound",
-            subject="Initial outreach",
-            body=message,
-        ))
+        session.add(
+            Message(
+                thread_id=thread_id,
+                direction="outbound",
+                subject="Initial outreach",
+                body=message,
+            )
+        )
         session.commit()
 
 
@@ -117,8 +117,12 @@ def _release_session(session_id: str) -> None:
 
 
 def _send_single_inquiry(
-    platform: SupplierPlatform, thread_id: int, product_url: str, message: str,
-    context_id: str, thread_name: str = "",
+    platform: SupplierPlatform,
+    thread_id: int,
+    product_url: str,
+    message: str,
+    context_id: str,
+    thread_name: str = "",
 ) -> tuple[bool, str | None]:
     """Send one inquiry in its own browser session.
 
@@ -129,7 +133,9 @@ def _send_single_inquiry(
         threading.current_thread().name = thread_name
 
     browser = BrowserSession(
-        proxy_country="AU", context_id=context_id, keep_alive=True,
+        proxy_country="AU",
+        context_id=context_id,
+        keep_alive=True,
     )
     browser.__enter__()
     session_id = browser.session_id
@@ -137,7 +143,9 @@ def _send_single_inquiry(
     with SessionLocal() as session:
         try:
             success = platform.send_inquiry(
-                browser.page, product_url, message,
+                browser.page,
+                product_url,
+                message,
             )
         except WholesaleProductError:
             thread = session.get(SupplierThread, thread_id)
@@ -145,7 +153,8 @@ def _send_single_inquiry(
             session.commit()
             log.info(
                 "Thread %d skipped — wholesale-only product (%s)",
-                thread_id, product_url,
+                thread_id,
+                product_url,
             )
             browser.__exit__(None, None, None)
             return False, None
@@ -153,7 +162,8 @@ def _send_single_inquiry(
             session.rollback()
             log.exception(
                 "Failed to send inquiry for thread %d (%s)",
-                thread_id, product_url,
+                thread_id,
+                product_url,
             )
             _detach_browser(browser)
             return False, session_id
@@ -161,7 +171,8 @@ def _send_single_inquiry(
     if not success:
         log.warning(
             "Inquiry not confirmed for thread %d (%s)",
-            thread_id, product_url,
+            thread_id,
+            product_url,
         )
         _detach_browser(browser)
         return False, session_id
@@ -173,14 +184,18 @@ def _send_single_inquiry(
 
 
 def _retry_with_agent(
-    thread_id: int, product_url: str, message: str,
+    thread_id: int,
+    product_url: str,
+    message: str,
     session_id: str,
 ) -> bool:
     """Retry a failed inquiry by dropping the LLM agent into the live session."""
     log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
     try:
         result = send_inquiry_via_agent(
-            session_id, product_url, message,
+            session_id,
+            product_url,
+            message,
         )
     except Exception:
         log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
@@ -199,7 +214,9 @@ def _retry_with_agent(
     if result.status == InquiryStatus.FAILED:
         log.warning(
             "Agent retry failed for thread %d (%s): %s",
-            thread_id, product_url, result.reason,
+            thread_id,
+            product_url,
+            result.reason,
         )
         return False
 
@@ -218,11 +235,15 @@ def _authenticate_platform(platform: SupplierPlatform) -> str:
     context_id = create_context()
     try:
         with BrowserSession(
-            proxy_country="AU", context_id=context_id, persist_context=True,
+            proxy_country="AU",
+            context_id=context_id,
+            persist_context=True,
         ) as browser:
             platform.login(browser.page, session_url=browser.live_url or "")
     except Exception:
-        log.exception("Auth failed for %s (context %s), stamina will retry", platform, context_id)
+        log.exception(
+            "Auth failed for %s (context %s), stamina will retry", platform, context_id
+        )
         raise
     return context_id
 
@@ -259,7 +280,8 @@ def send_outreach(agent_only: bool = False) -> int:
 
         log.info(
             "Sending %d inquiries on %s%s",
-            len(thread_infos), platform_name,
+            len(thread_infos),
+            platform_name,
             " (agent only)" if agent_only else "",
         )
 
@@ -276,7 +298,9 @@ def send_outreach(agent_only: bool = False) -> int:
             for info in infos_with_messages:
                 session_id = _create_agent_session(context_id)
                 if _retry_with_agent(
-                    info["thread_id"], info["product_url"], info["message"],
+                    info["thread_id"],
+                    info["product_url"],
+                    info["message"],
                     session_id=session_id,
                 ):
                     sent_count += 1
@@ -290,8 +314,12 @@ def send_outreach(agent_only: bool = False) -> int:
                 slug = platform.url_slug(info["product_url"])
                 future = pool.submit(
                     _send_single_inquiry,
-                    platform, info["thread_id"], info["product_url"], info["message"],
-                    context_id=context_id, thread_name=slug,
+                    platform,
+                    info["thread_id"],
+                    info["product_url"],
+                    info["message"],
+                    context_id=context_id,
+                    thread_name=slug,
                 )
                 futures[future] = info
 
@@ -312,11 +340,14 @@ def send_outreach(agent_only: bool = False) -> int:
         # Pass 2: retry failures with LLM agent (sequential)
         if failed:
             log.info(
-                "Retrying %d failed inquiries with LLM agent", len(failed),
+                "Retrying %d failed inquiries with LLM agent",
+                len(failed),
             )
             for info in failed:
                 if _retry_with_agent(
-                    info["thread_id"], info["product_url"], info["message"],
+                    info["thread_id"],
+                    info["product_url"],
+                    info["message"],
                     session_id=info["session_id"],
                 ):
                     sent_count += 1

@@ -82,7 +82,10 @@ def _safe_blob_name(tool_call_id: str | None) -> str:
 
 
 def _build_placeholder(
-    tool_name: str, part_tokens: int, blob_id: str, content: str,
+    tool_name: str,
+    part_tokens: int,
+    blob_id: str,
+    content: str,
 ) -> str:
     total_lines = len(content.splitlines())
     return (
@@ -101,10 +104,13 @@ def _estimate_tokens(messages: list[ModelMessage]) -> int:
         if isinstance(msg, ModelRequest):
             for part in msg.parts:
                 if isinstance(part, ToolReturnPart):
-                    c = part.content if isinstance(part.content, str) else json.dumps(part.content, default=str)
+                    c = (
+                        part.content
+                        if isinstance(part.content, str)
+                        else json.dumps(part.content, default=str)
+                    )
                     total += len(c) // CHARS_PER_TOKEN
     return total
-
 
 
 def _evict_oversized_tool_returns(
@@ -149,14 +155,20 @@ def _evict_oversized_tool_returns(
             log.warning(
                 "Evicting oversized tool return from %s "
                 "(~%d tokens, budget: %d) → %s",
-                part.tool_name, part_tokens, budget, blob_id,
+                part.tool_name,
+                part_tokens,
+                budget,
+                blob_id,
             )
 
             fpath = EVICTION_DIR / f"{blob_id}.txt"
             fpath.write_text(content_str)
 
             part.content = _build_placeholder(
-                part.tool_name, part_tokens, blob_id, content_str,
+                part.tool_name,
+                part_tokens,
+                blob_id,
+                content_str,
             )
             if part.tool_call_id:
                 evicted_ids.add(part.tool_call_id)
@@ -186,9 +198,7 @@ def grep_evicted_result(blob_id: str, pattern: str, context: int = 0) -> str:
 
     if context <= 0:
         output = [
-            f"{i + 1}:{line}"
-            for i, line in enumerate(lines)
-            if compiled.search(line)
+            f"{i + 1}:{line}" for i, line in enumerate(lines) if compiled.search(line)
         ]
     else:
         match_indices = [i for i, line in enumerate(lines) if compiled.search(line)]

@@ -60,17 +60,19 @@ class TestOutputTab:
 
     def test_upsert_output_row_inserts_new(self, sheets: SheetsService):
         rows_before = sheets.read_output_rows()
-        sheets.upsert_output_row({
-            "source_product_title": "TEST PRODUCT",
-            "source_link": "https://www.kogan.com/au/buy/test-product-slug/",
-            "supplier_name": "Test Supplier Co",
-            "best_price_usd_fob": "99.99",
-            "moq": "500",
-            "lead_time": "30 days",
-            "email_chain": "",
-            "last_updated_date": "2026-04-30",
-            "initial_outreach_date": "2026-04-30",
-        })
+        sheets.upsert_output_row(
+            {
+                "source_product_title": "TEST PRODUCT",
+                "source_link": "https://www.kogan.com/au/buy/test-product-slug/",
+                "supplier_name": "Test Supplier Co",
+                "best_price_usd_fob": "99.99",
+                "moq": "500",
+                "lead_time": "30 days",
+                "email_chain": "",
+                "last_updated_date": "2026-04-30",
+                "initial_outreach_date": "2026-04-30",
+            }
+        )
         rows_after = sheets.read_output_rows()
         assert len(rows_after) == len(rows_before) + 1
         new_row = rows_after[-1]
@@ -79,20 +81,26 @@ class TestOutputTab:
         assert new_row["source_slug"] == "test-product-slug/"
 
     def test_upsert_output_row_updates_existing(self, sheets: SheetsService):
-        sheets.upsert_output_row({
-            "source_product_title": "TEST PRODUCT",
-            "source_link": "https://www.kogan.com/au/buy/test-product-slug/",
-            "supplier_name": "Test Supplier Co",
-            "best_price_usd_fob": "79.99",
-            "moq": "1000",
-            "lead_time": "25 days",
-            "email_chain": "",
-            "last_updated_date": "2026-04-30",
-            "initial_outreach_date": "2026-04-30",
-        })
+        sheets.upsert_output_row(
+            {
+                "source_product_title": "TEST PRODUCT",
+                "source_link": "https://www.kogan.com/au/buy/test-product-slug/",
+                "supplier_name": "Test Supplier Co",
+                "best_price_usd_fob": "79.99",
+                "moq": "1000",
+                "lead_time": "25 days",
+                "email_chain": "",
+                "last_updated_date": "2026-04-30",
+                "initial_outreach_date": "2026-04-30",
+            }
+        )
         rows = sheets.read_output_rows()
-        matches = [r for r in rows if r["supplier_name"] == "Test Supplier Co"
-                   and r["source_slug"] == "test-product-slug/"]
+        matches = [
+            r
+            for r in rows
+            if r["supplier_name"] == "Test Supplier Co"
+            and r["source_slug"] == "test-product-slug/"
+        ]
         assert len(matches) == 1
         assert matches[0]["best_price_usd_fob"] == "79.99"
         assert matches[0]["moq"] == "1000"
@@ -101,6 +109,10 @@ class TestOutputTab:
         """Remove the test row added by previous tests."""
         sheets.delete_output_row("test-product-slug/", "Test Supplier Co")
         rows = sheets.read_output_rows()
-        matches = [r for r in rows if r["supplier_name"] == "Test Supplier Co"
-                   and r["source_slug"] == "test-product-slug/"]
+        matches = [
+            r
+            for r in rows
+            if r["supplier_name"] == "Test Supplier Co"
+            and r["source_slug"] == "test-product-slug/"
+        ]
         assert len(matches) == 0

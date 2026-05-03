@@ -1,4 +1,12 @@
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -15,7 +23,9 @@ class SupplierProduct(Base):
     )
 
     id = Column(Integer, primary_key=True)
-    source_product_id = Column(Integer, ForeignKey("source_products.id"), nullable=False)
+    source_product_id = Column(
+        Integer, ForeignKey("source_products.id"), nullable=False
+    )
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
     platform = Column(String, nullable=False)
     product_url = Column(String, nullable=False, unique=True)

@@ -63,7 +63,9 @@ class BrowserSession:
     def __enter__(self) -> "BrowserSession":
         proxies = None
         if self._proxy_country:
-            proxies = [{"type": "browserbase", "geolocation": {"country": self._proxy_country}}]
+            proxies = [
+                {"type": "browserbase", "geolocation": {"country": self._proxy_country}}
+            ]
 
         create_kwargs = {
             "project_id": browserbase_settings.BROWSERBASE_PROJECT_ID,

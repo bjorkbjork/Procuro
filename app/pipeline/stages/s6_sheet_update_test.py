@@ -179,7 +179,8 @@ class TestUpdateSheet:
         mock_sheets = MagicMock()
 
         with patch(
-            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+            "app.pipeline.stages.s6_sheet_update.SheetsService",
+            return_value=mock_sheets,
         ):
             count = update_sheet()
 
@@ -233,7 +234,8 @@ class TestUpdateSheet:
 
         mock_sheets = MagicMock()
         with patch(
-            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+            "app.pipeline.stages.s6_sheet_update.SheetsService",
+            return_value=mock_sheets,
         ):
             update_sheet()
 
@@ -255,7 +257,8 @@ class TestUpdateSheet:
         mock_sheets.upsert_output_row.side_effect = RuntimeError("Sheets API error")
 
         with patch(
-            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+            "app.pipeline.stages.s6_sheet_update.SheetsService",
+            return_value=mock_sheets,
         ):
             count = update_sheet()
 
@@ -264,7 +267,8 @@ class TestUpdateSheet:
     def test_empty_db(self):
         mock_sheets = MagicMock()
         with patch(
-            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+            "app.pipeline.stages.s6_sheet_update.SheetsService",
+            return_value=mock_sheets,
         ):
             count = update_sheet()
 

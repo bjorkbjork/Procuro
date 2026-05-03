@@ -25,7 +25,8 @@ def _build_row(thread: SupplierThread) -> dict:
     latest_quote = thread.quotes[-1] if thread.quotes else None
 
     first_outbound = next(
-        (m for m in thread.messages if m.direction == "outbound"), None,
+        (m for m in thread.messages if m.direction == "outbound"),
+        None,
     )
 
     gmail_link = ""
@@ -37,12 +38,20 @@ def _build_row(thread: SupplierThread) -> dict:
         "source_link": source.url,
         "source_slug": source.slug,
         "supplier_name": supplier.name,
-        "best_price_usd_fob": f"{latest_quote.price_usd:.2f}" if latest_quote else "Awaiting Quotes",
+        "best_price_usd_fob": (
+            f"{latest_quote.price_usd:.2f}" if latest_quote else "Awaiting Quotes"
+        ),
         "moq": str(latest_quote.moq) if latest_quote and latest_quote.moq else "",
         "lead_time": latest_quote.lead_time or "" if latest_quote else "",
         "email_chain": gmail_link,
-        "last_updated_date": thread.last_updated.strftime("%Y-%m-%d") if thread.last_updated else "",
-        "initial_outreach_date": first_outbound.sent_at.strftime("%Y-%m-%d") if first_outbound and first_outbound.sent_at else "",
+        "last_updated_date": (
+            thread.last_updated.strftime("%Y-%m-%d") if thread.last_updated else ""
+        ),
+        "initial_outreach_date": (
+            first_outbound.sent_at.strftime("%Y-%m-%d")
+            if first_outbound and first_outbound.sent_at
+            else ""
+        ),
     }
 
 
@@ -73,7 +82,8 @@ def update_sheet() -> int:
             except Exception:
                 log.exception(
                     "Failed to update sheet for thread %d (%s)",
-                    thread.id, thread.supplier.name,
+                    thread.id,
+                    thread.supplier.name,
                 )
 
     log.info("Sheet update complete: %d rows upserted", count)
