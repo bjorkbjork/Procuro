@@ -2,10 +2,16 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        type: environment
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1
