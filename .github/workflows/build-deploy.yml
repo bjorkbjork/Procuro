@@ -48,10 +48,10 @@ jobs:
           docker push $IMAGE:latest
 
   deploy:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'aws-production' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
