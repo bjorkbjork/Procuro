@@ -106,5 +106,6 @@ class BrowserSession:
         if self._pw:
             self._pw.stop()
         if self.session_id:
+            log.info("Releasing session %s (BrowserSession.__exit__)", self.session_id)
             bb.sessions.update(self.session_id, status="REQUEST_RELEASE")
         return False

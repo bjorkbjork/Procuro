@@ -292,8 +292,9 @@ class Agent(_BaseAgent):
     """
 
     _evicted_ids: set[str]
+    _cleanup_on_exit: bool
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, cleanup: bool = True, **kwargs: Any) -> None:
         model = kwargs.get("model") or (args[0] if args else None)
         model_id = getattr(model, "model_name", "") if model else ""
         context_window = _get_context_window(model_id)
@@ -312,9 +313,11 @@ class Agent(_BaseAgent):
 
         super().__init__(*args, **kwargs)
         self._evicted_ids = evicted_ids
+        self._cleanup_on_exit = cleanup
 
     def run_sync(self, *args: Any, **kwargs: Any) -> Any:
         try:
             return super().run_sync(*args, **kwargs)
         finally:
-            cleanup_evicted(self._evicted_ids)
+            if self._cleanup_on_exit:
+                cleanup_evicted(self._evicted_ids)

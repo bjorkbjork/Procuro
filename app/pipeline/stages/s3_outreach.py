@@ -110,6 +110,7 @@ def _detach_browser(browser: BrowserSession) -> None:
 
 def _release_session(session_id: str) -> None:
     """Release a Browserbase session."""
+    log.info("Releasing session %s (_release_session)", session_id, stack_info=True)
     try:
         bb.sessions.update(session_id, status="REQUEST_RELEASE")
     except Exception:
@@ -188,6 +189,9 @@ def _retry_with_agent(
     product_url: str,
     message: str,
     session_id: str,
+    *,
+    cleanup: bool = True,
+    platform_prompt: str = "",
 ) -> bool:
     """Retry a failed inquiry by dropping the LLM agent into the live session."""
     log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
@@ -196,12 +200,14 @@ def _retry_with_agent(
             session_id,
             product_url,
             message,
+            cleanup=cleanup,
+            platform_prompt=platform_prompt,
         )
     except Exception:
         log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
         return False
-    finally:
-        _release_session(session_id)
+
+    _release_session(session_id)
 
     if result.status == InquiryStatus.WHOLESALE:
         with SessionLocal() as session:
@@ -302,6 +308,8 @@ def send_outreach(agent_only: bool = False) -> int:
                     info["product_url"],
                     info["message"],
                     session_id=session_id,
+                    cleanup=False,
+                    platform_prompt=platform.inquiry_agent_prompt,
                 ):
                     sent_count += 1
             continue
@@ -349,6 +357,7 @@ def send_outreach(agent_only: bool = False) -> int:
                     info["product_url"],
                     info["message"],
                     session_id=info["session_id"],
+                    platform_prompt=platform.inquiry_agent_prompt,
                 ):
                     sent_count += 1
 

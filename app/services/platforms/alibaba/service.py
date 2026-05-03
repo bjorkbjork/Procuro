@@ -140,7 +140,11 @@ def login_alibaba(page: Page, session_url: str = "") -> None:
     google_login(popup, session_url=session_url)
     log.info("Google login returned, main page URL: %s", page.url)
 
-    page.wait_for_url("**alibaba.com**", timeout=30_000)
+    page.wait_for_url(
+        lambda url: "login.alibaba.com" not in url,
+        timeout=30_000,
+        wait_until="domcontentloaded",
+    )
     log.info("URL after wait: %s", page.url)
     page.wait_for_timeout(2_000)
     log.info("Logged into Alibaba as %s", settings.GMAIL_ACCOUNT)
