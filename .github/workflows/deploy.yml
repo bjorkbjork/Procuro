@@ -52,6 +52,14 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GMAIL_ACCOUNT,GMAIL_PASSWORD,BEDROCK_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,LOGFIRE_TOKEN,MAINTAINER_EMAIL_ADDRESS,MAX_WORKERS,GOOGLE_TOTP_SECRET,PG_USER,PG_PASSWORD,PG_HOST,PG_PORT,DB_NAME,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_PROJECT_ID,GOOGLE_AUTH_URI,GOOGLE_TOKEN_URI,GOOGLE_AUTH_PROVIDER_X509_CERT_URL,GOOGLE_REFRESH_TOKEN,GOOGLE_SHEET_ID,BROWSERBASE_API_KEY,BROWSERBASE_PROJECT_ID,TWOCAPTCHA_API_KEY,CHEAP,MODERATE,EXPENSIVE,SOURCING_INTERVAL_MINUTES,NEGOTIATION_INTERVAL_MINUTES
           script: |
+            if [ ! -d ~/sourcingAgent ]; then
+              echo "First run — bootstrapping"
+              sudo apt-get update && sudo apt-get install -y git curl docker.io docker-compose-v2
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker $USER
+              git clone https://github.com/bjorkbjork/Procuro.git ~/sourcingAgent
+            fi
+
             cd ~/sourcingAgent
             git fetch --tags
             LATEST_TAG=$(git describe --tags --abbrev=0)
