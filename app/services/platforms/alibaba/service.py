@@ -132,6 +132,7 @@ def login_alibaba(page: Page, session_url: str = "") -> None:
 
     log.info("Login page loaded, URL: %s", page.url)
 
+    page.wait_for_selector("#google a", timeout=30_000)
     with page.expect_popup() as popup_info:
         page.locator("#google a").click()
     popup = popup_info.value
@@ -215,6 +216,8 @@ def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:
 
     iframe_pattern = re.compile(r"message\.alibaba\.com")
     frame = _get_inquiry_frame(page)
+    # Wait for the iframe React app to render the textarea before running JS
+    frame.wait_for_selector(INQUIRY_TEXTAREA, timeout=30_000)
 
     try:
         result = frame.evaluate(
