@@ -136,6 +136,33 @@ def sourcing_pipeline():
     _run_stage("6_sheet_update", update_sheet)
 
 
+def retry_stalled_outreach():
+    from datetime import datetime, timezone, timedelta
+
+    from app.db.database import SessionLocal
+    from app.db.models.supplier_thread import SupplierThread
+    from app.pipeline.stages.s3_outreach import send_outreach
+
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        minutes=scheduler_settings.STALLED_OUTREACH_MINUTES
+    )
+    with SessionLocal() as session:
+        stalled = (
+            session.query(SupplierThread)
+            .filter(
+                SupplierThread.state == "NEW",
+                SupplierThread.created_at < cutoff,
+            )
+            .count()
+        )
+
+    if not stalled:
+        return
+
+    log.info("%d threads stalled in NEW — retrying outreach", stalled)
+    _run_stage("3_outreach_retry", send_outreach)
+
+
 def negotiation_pipeline():
     from app.pipeline.stages.s4_inbox_triage import triage_inbox
     from app.pipeline.stages.s5_negotiation import process_negotiations
@@ -170,6 +197,13 @@ def register_jobs():
         day_of_week="mon-fri",
         timezone="Australia/Sydney",
         id="negotiation_pipeline",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        retry_stalled_outreach,
+        trigger="cron",
+        minute=f"*/{sourcing_minutes}",
+        id="retry_stalled_outreach",
         replace_existing=True,
     )
     log.info(
