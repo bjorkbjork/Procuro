@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from pydantic_ai.messages import BinaryContent
 from botocore.config import Config
 from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
 from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart
@@ -28,7 +29,7 @@ _provider = None
 EVICTION_DIR = PROJECT_ROOT / "snapshots"
 CHARS_PER_TOKEN = 4
 EVICTION_MIN_TOKENS = 1_000
-EVICTION_BUDGET_RATIO = 0.60
+EVICTION_BUDGET_RATIO = 0.05
 
 
 # FIXME: Put AWS Bedrock Guardrail IDs here once deployed
@@ -105,6 +106,7 @@ def _estimate_tokens(messages: list[ModelMessage]) -> int:
     return total
 
 
+
 def _evict_oversized_tool_returns(
     messages: list[ModelMessage],
     context_window: int,
@@ -128,15 +130,19 @@ def _evict_oversized_tool_returns(
             if part.tool_call_id and part.tool_call_id in evicted_ids:
                 continue
 
+            # Binary content (screenshots, PDFs, etc.) — leave in context
+            if isinstance(part.content, BinaryContent):
+                continue
+
             content_str = (
                 part.content
                 if isinstance(part.content, str)
                 else json.dumps(part.content, default=str)
             )
             part_tokens = len(content_str) // CHARS_PER_TOKEN
-            if part_tokens <= budget and part_tokens <= EVICTION_MIN_TOKENS:
-                continue
             if part_tokens <= EVICTION_MIN_TOKENS:
+                continue
+            if part_tokens <= budget:
                 continue
 
             blob_id = _safe_blob_name(part.tool_call_id)
@@ -215,10 +221,51 @@ def read_evicted_result(blob_id: str, start_line: int, end_line: int) -> str:
     return f"Lines {start + 1}-{end} of {len(lines)} total:\n" + "\n".join(chunk)
 
 
+_BINARY_MEDIA_TYPES: dict[str, str] = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+}
+
+
+def _resolve_evicted_file(blob_id: str) -> Path:
+    """Find the evicted file for a blob_id, regardless of extension."""
+    for fpath in EVICTION_DIR.glob(f"{blob_id}.*"):
+        return fpath
+    raise ModelRetry(f"No evicted result found for blob_id '{blob_id}'")
+
+
+def read_evicted_file(blob_id: str) -> BinaryContent | str:
+    """Read an evicted binary file (screenshot, PDF, etc.) and return it to the model."""
+    fpath = _resolve_evicted_file(blob_id)
+    media_type = _BINARY_MEDIA_TYPES.get(fpath.suffix, "")
+    if media_type:
+        return BinaryContent(data=fpath.read_bytes(), media_type=media_type)
+    return fpath.read_text()
+
+
 _EVICTION_TOOLS = [
     Tool(grep_evicted_result, takes_ctx=False),
     Tool(read_evicted_result, takes_ctx=False),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+
+
+def cleanup_evicted(evicted_ids: set[str]) -> None:
+    """Delete all evicted files for a set of blob IDs."""
+    if not EVICTION_DIR.exists():
+        return
+    for blob_id in evicted_ids:
+        for fpath in EVICTION_DIR.glob(f"{blob_id}.*"):
+            fpath.unlink(missing_ok=True)
+            log.debug("Cleaned up evicted file: %s", fpath.name)
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +280,8 @@ class Agent(_BaseAgent):
     placeholders. The agent automatically gets grep/read tools to
     explore evicted content.
     """
+
+    _evicted_ids: set[str]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         model = kwargs.get("model") or (args[0] if args else None)
@@ -252,3 +301,10 @@ class Agent(_BaseAgent):
         kwargs["tools"] = existing_tools
 
         super().__init__(*args, **kwargs)
+        self._evicted_ids = evicted_ids
+
+    def run_sync(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return super().run_sync(*args, **kwargs)
+        finally:
+            cleanup_evicted(self._evicted_ids)
