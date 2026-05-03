@@ -3,22 +3,38 @@
 The ``Agent`` exported here wraps PydanticAI's Agent with automatic tool-return
 eviction: large results are written to local files and replaced with a
 placeholder. Two tools — ``grep_evicted_result`` and ``read_evicted_result`` —
-are injected so every agent can explore evicted content."""
+are injected so every agent can explore evicted content.
+
+``RotatingModel`` wraps multiple Bedrock models with per-model RPM tracking.
+On 429, it transparently switches to the next model with capacity — including
+mid-agent-run during tool loops."""
 
 import json
 import logging
 import re
+import threading
+import time
 import uuid as uuid_mod
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 import boto3
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import BinaryContent
+from pydantic_ai.models import ModelRequestParameters, ModelSettings, StreamedResponse
 from botocore.config import Config
 from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
-from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    ToolReturnPart,
+)
 from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.providers.bedrock import BedrockProvider
+from pydantic_ai.usage import RequestUsage
 
 import logfire
 
@@ -47,7 +63,7 @@ def bedrock_provider() -> BedrockProvider:
             "bedrock-runtime",
             region_name=settings.BEDROCK_REGION,
             config=Config(
-                retries={"max_attempts": 10, "mode": "adaptive"},
+                retries={"max_attempts": 3, "mode": "adaptive"},
                 read_timeout=120,
                 connect_timeout=30,
             ),
@@ -56,8 +72,146 @@ def bedrock_provider() -> BedrockProvider:
     return _provider
 
 
-def get_model(model_id: str = model_settings.MODERATE) -> BedrockConverseModel:
+def get_single_model(model_id: str) -> BedrockConverseModel:
+    """Create a single Bedrock model (no rotation). Used internally by RotatingModel."""
     return BedrockConverseModel(model_name=model_id, provider=bedrock_provider())
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit-aware model rotation
+# ---------------------------------------------------------------------------
+
+
+class RotatingModel(BedrockConverseModel):
+    """Wraps multiple Bedrock models with per-model RPM tracking.
+
+    On each request, picks a model with available capacity. If the chosen
+    model returns 429, marks it exhausted and retries on the next. If all
+    models are exhausted, sleeps until the earliest slot frees up.
+
+    Transparent to PydanticAI — works as a drop-in Model replacement.
+    """
+
+    def __init__(self, pool: list[tuple[str, int]]):
+        self._pool = [(get_single_model(model_id), rpm) for model_id, rpm in pool]
+        self._lock = threading.Lock()
+        self._timestamps: dict[str, list[float]] = {
+            m.model_name: [] for m, _ in self._pool
+        }
+        # Initialise from the first model so PydanticAI sees valid metadata
+        first_model = self._pool[0][0]
+        super().__init__(
+            model_name=first_model.model_name,
+            provider=bedrock_provider(),
+        )
+
+    def _pick_model(self) -> BedrockConverseModel:
+        """Return a model under its RPM limit, sleeping if all exhausted."""
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                for model, rpm in self._pool:
+                    ts = self._timestamps[model.model_name]
+                    ts[:] = [t for t in ts if now - t < 60]
+                    if len(ts) < rpm:
+                        ts.append(now)
+                        return model
+
+                # All exhausted — find earliest free slot
+                earliest = min(
+                    ts[0] + 60
+                    for m, _ in self._pool
+                    if (ts := self._timestamps[m.model_name])
+                )
+                wait = max(0.1, earliest - now + 0.1)
+
+            log.info("All models at RPM limit, waiting %.1fs", wait)
+            time.sleep(wait)
+
+    def _mark_exhausted(self, model: BedrockConverseModel) -> None:
+        """Fill a model's RPM window so it won't be picked again this minute."""
+        with self._lock:
+            rpm = next(r for m, r in self._pool if m is model)
+            ts = self._timestamps[model.model_name]
+            now = time.monotonic()
+            ts[:] = [now] * rpm
+
+    async def request(
+        self,
+        messages: list[ModelMessage],
+        model_settings_arg: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+    ) -> ModelResponse:
+        tried: set[str] = set()
+        last_err: Exception | None = None
+        while len(tried) < len(self._pool):
+            model = self._pick_model()
+            tried.add(model.model_name)
+            try:
+                response = await model.request(
+                    messages, model_settings_arg, model_request_parameters
+                )
+                log.debug("Request served by %s", model.model_name)
+                return response
+            except ModelHTTPError as e:
+                if e.status_code != 429:
+                    raise
+                log.warning("429 from %s, rotating to next model", model.model_name)
+                self._mark_exhausted(model)
+                last_err = e
+        # All models 429'd — wait and retry on the first that frees up
+        log.warning("All models returned 429, waiting for capacity")
+        model = self._pick_model()
+        return await model.request(
+            messages, model_settings_arg, model_request_parameters
+        )
+
+    @asynccontextmanager
+    async def request_stream(
+        self,
+        messages: list[ModelMessage],
+        model_settings_arg: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+        run_context: Any = None,
+    ) -> AsyncIterator[StreamedResponse]:
+        model = self._pick_model()
+        try:
+            async with model.request_stream(
+                messages, model_settings_arg, model_request_parameters, run_context
+            ) as stream:
+                yield stream
+        except ModelHTTPError as e:
+            if e.status_code != 429:
+                raise
+            log.warning("429 from %s during stream, rotating", model.model_name)
+            self._mark_exhausted(model)
+            fallback = self._pick_model()
+            async with fallback.request_stream(
+                messages, model_settings_arg, model_request_parameters, run_context
+            ) as stream:
+                yield stream
+
+
+_pool_instances: dict[str, RotatingModel] = {}
+_pool_lock = threading.Lock()
+
+_TIER_POOLS = {
+    model_settings.CHEAP: model_settings.CHEAP_POOL,
+    model_settings.MODERATE: model_settings.MODERATE_POOL,
+    model_settings.EXPENSIVE: model_settings.EXPENSIVE_POOL,
+}
+
+
+def get_model(model_id: str = model_settings.MODERATE) -> RotatingModel:
+    """Return a shared RotatingModel for the given tier. RPM state is shared
+    across all callers so rate limits are tracked globally."""
+    with _pool_lock:
+        if model_id not in _pool_instances:
+            pool = _TIER_POOLS.get(model_id)
+            if pool is None:
+                pool = [(model_id, 10)]
+            _pool_instances[model_id] = RotatingModel(pool)
+        return _pool_instances[model_id]
 
 
 # ---------------------------------------------------------------------------

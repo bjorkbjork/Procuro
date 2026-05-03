@@ -75,6 +75,24 @@ class ModelSettings(BaseSettings):
     # Если у тебя есть много денег :) (И, да, я говорю по-русски немного. Это не ИИ)
     EXPENSIVE: str = "au.anthropic.claude-opus-4-6-v1"
 
+    # Model pools for rate limit rotation: list of (model_id, rpm_limit)
+    CHEAP_POOL: list[tuple[str, int]] = [
+        ("au.anthropic.claude-haiku-4-5-20251001-v1:0", 10),
+        ("qwen.qwen3-32b-v1:0", 100),
+        ("mistral.ministral-3-8b-instruct", 100),
+    ]
+    MODERATE_POOL: list[tuple[str, int]] = [
+        ("au.anthropic.claude-sonnet-4-6", 10),
+        ("mistral.mistral-large-3-675b-instruct", 100),
+        ("deepseek.v3.2", 100),
+        ("moonshotai.kimi-k2.5", 100),
+    ]
+    EXPENSIVE_POOL: list[tuple[str, int]] = [
+        ("au.anthropic.claude-opus-4-6-v1", 10),
+        ("mistral.mistral-large-3-675b-instruct", 100),
+        ("deepseek.v3.2", 100),
+    ]
+
 
 class SchedulerSettings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
