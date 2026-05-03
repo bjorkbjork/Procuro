@@ -5,9 +5,12 @@ __pycache__/
 .ruff_cache/
 .pdm-python
 .env
+*.pem
 # relevant information
 # https://youtu.be/xIk0_uFV-rU?si=A2NJXcz39sYBxlWf&t=104
 node_modules/
+
+# dont track tool evictions
 snapshots/
 
 # don't track my docs
