@@ -1,4 +1,4 @@
-name: Deploy
+name: Build & Deploy
 
 on:
   workflow_dispatch:
@@ -45,6 +45,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: docker-compose.yml
+          target: ~/sourcingAgent
+
       - name: Deploy to server
         uses: appleboy/ssh-action@v1
         env:
@@ -118,36 +130,6 @@ jobs:
             [ -n "$EXPENSIVE" ] && echo "EXPENSIVE=$EXPENSIVE" >> .env
             [ -n "$SOURCING_INTERVAL_MINUTES" ] && echo "SOURCING_INTERVAL_MINUTES=$SOURCING_INTERVAL_MINUTES" >> .env
             [ -n "$NEGOTIATION_INTERVAL_MINUTES" ] && echo "NEGOTIATION_INTERVAL_MINUTES=$NEGOTIATION_INTERVAL_MINUTES" >> .env
-
-            cat > docker-compose.yml <<'COMPOSEEOF'
-services:
-  db:
-    image: postgres:16-alpine
-    env_file: .env
-    environment:
-      POSTGRES_USER: ${PG_USER:-sourcing_agent}
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
-      POSTGRES_DB: ${DB_NAME:-sourcingAgentDb}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-sourcing_agent} -d ${DB_NAME:-sourcingAgentDb}"]
-      interval: 5s
-      retries: 5
-  app:
-    image: ghcr.io/bjorkbjork/sourcing-agent:latest
-    depends_on:
-      db:
-        condition: service_healthy
-    env_file: .env
-    environment:
-      PG_HOST: db
-    restart: always
-volumes:
-  pgdata:
-COMPOSEEOF
 
             sudo docker compose pull app
             sudo docker compose up -d
