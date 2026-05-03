@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pydantic
@@ -71,9 +72,24 @@ class ModelSettings(BaseSettings):
     EXPENSIVE: str = "au.anthropic.claude-opus-4-6-v1"
 
 
+class SchedulerSettings(BaseSettings):
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    SOURCING_INTERVAL_MINUTES: int = 15
+    NEGOTIATION_INTERVAL_MINUTES: int = 30
+
+
 settings = Settings()
 pg_settings = PostgresSettings()
 google_settings = GoogleSettings()
 browserbase_settings = BrowserbaseSettings()
 captcha_settings = CaptchaSettings()
 model_settings = ModelSettings()
+scheduler_settings = SchedulerSettings()
+
+
+def configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(threadName)s] %(name)s %(levelname)s %(message)s",
+    )

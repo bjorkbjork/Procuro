@@ -16,10 +16,9 @@ import argparse
 import logging
 import sys
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(threadName)s] %(name)s %(levelname)s %(message)s",
-)
+from app.base.config import configure_logging
+
+configure_logging()
 log = logging.getLogger("pipeline")
 
 
