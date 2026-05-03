@@ -143,7 +143,13 @@ def _triage_single_thread(gmail_thread_id: str):
         log.info("  No-reply sender but not a recognized notification — falling through to LLM")
 
     # Tier 3: LLM triage
-    result = _triage_with_llm(sender_name, sender_email, subject, body)
+    from unittest.mock import patch as _patch
+    def _dry_add_ignore(address: str) -> str:
+        log.info("    [dry-run] Would add %s to ignore list", address)
+        return f"[dry-run] Would add {address} to ignore list"
+
+    with _patch("app.pipeline.stages.s4_inbox_triage._add_ignore_email", _dry_add_ignore):
+        result = _triage_with_llm(sender_name, sender_email, subject, body)
     log.info("  RESULT (LLM triage):")
     log.info("    Action: %s", result.action)
     log.info("    Thread ID match: %s", result.thread_id)
@@ -207,7 +213,13 @@ def _triage_dry_run():
                     continue
                 log.info("  No-reply sender, not a known notification — falling through to LLM")
 
-            result = _triage_with_llm(sender_name, sender_email, subject, body)
+            from unittest.mock import patch as _patch
+            def _dry_add_ignore(address: str) -> str:
+                log.info("    [dry-run] Would add %s to ignore list", address)
+                return f"[dry-run] Would add {address} to ignore list"
+
+            with _patch("app.pipeline.stages.s4_inbox_triage._add_ignore_email", _dry_add_ignore):
+                result = _triage_with_llm(sender_name, sender_email, subject, body)
             log.info("  → LLM: action=%s thread_id=%s", result.action, result.thread_id)
             log.info("    Summary: %s", result.summary)
             log.info("    Reason: %s", result.reason)
