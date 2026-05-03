@@ -5,7 +5,7 @@ RUN pip install pdm
 WORKDIR /app
 
 COPY pyproject.toml pdm.lock ./
-RUN pdm install --prod --no-self --no-editable
+RUN pdm use -f /usr/local/bin/python3 && pdm install --prod --no-self --no-editable
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
