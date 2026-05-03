@@ -20,7 +20,14 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart
 from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.providers.bedrock import BedrockProvider
 
+import logfire
+
 from app.base.config import PROJECT_ROOT, model_settings, settings
+
+logfire.configure(
+    token=settings.LOGFIRE_TOKEN or None, send_to_logfire="if-token-present"
+)
+logfire.instrument_pydantic_ai()
 
 log = logging.getLogger(__name__)
 

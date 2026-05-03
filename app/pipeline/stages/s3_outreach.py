@@ -20,7 +20,12 @@ from app.db.models.source_product import SourceProduct
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
 from app.base.config import browserbase_settings
-from app.services.browser import BrowserSession, bb, create_context
+from app.services.browser import (
+    BrowserSession,
+    bb,
+    create_context,
+    wait_for_session_complete,
+)
 from app.services.platforms import get_platforms
 from app.services.platforms.alibaba.service import WholesaleProductError
 from app.services.platforms.platform import SupplierPlatform
@@ -192,7 +197,7 @@ def _retry_with_agent(
     *,
     cleanup: bool = True,
     platform_prompt: str = "",
-) -> bool:
+) -> InquiryResult:
     """Retry a failed inquiry by dropping the LLM agent into the live session."""
     log.info("Retrying thread %d via LLM agent (%s)", thread_id, product_url)
     try:
@@ -205,7 +210,7 @@ def _retry_with_agent(
         )
     except Exception:
         log.exception("Agent retry error for thread %d (%s)", thread_id, product_url)
-        return False
+        return InquiryResult(status=InquiryStatus.FAILED, reason="Agent exception")
 
     _release_session(session_id)
 
@@ -215,20 +220,23 @@ def _retry_with_agent(
             thread.state = "UNPROCESSABLE"
             session.commit()
         log.info("Agent: thread %d is wholesale-only (%s)", thread_id, product_url)
-        return False
 
-    if result.status == InquiryStatus.FAILED:
+    elif result.status == InquiryStatus.FAILED:
         log.warning(
             "Agent retry failed for thread %d (%s): %s",
             thread_id,
             product_url,
             result.reason,
         )
-        return False
 
-    _record_success(thread_id, message)
-    log.info("Agent retry succeeded for thread %d (%s)", thread_id, product_url)
-    return True
+    elif result.status == InquiryStatus.LOGIN_REQUIRED:
+        log.warning("Agent hit login page for thread %d (%s)", thread_id, product_url)
+
+    elif result.status == InquiryStatus.SENT:
+        _record_success(thread_id, message)
+        log.info("Agent retry succeeded for thread %d (%s)", thread_id, product_url)
+
+    return result
 
 
 @stamina.retry(on=Exception, timeout=300)
@@ -245,12 +253,14 @@ def _authenticate_platform(platform: SupplierPlatform) -> str:
             context_id=context_id,
             persist_context=True,
         ) as browser:
+            session_id = browser.session_id
             platform.login(browser.page, session_url=browser.live_url or "")
     except Exception:
         log.exception(
             "Auth failed for %s (context %s), stamina will retry", platform, context_id
         )
         raise
+    wait_for_session_complete(session_id)
     return context_id
 
 
@@ -303,15 +313,32 @@ def send_outreach(agent_only: bool = False) -> int:
             # Send all via LLM agent — create a fresh session per inquiry
             for info in infos_with_messages:
                 session_id = _create_agent_session(context_id)
-                if _retry_with_agent(
+                result = _retry_with_agent(
                     info["thread_id"],
                     info["product_url"],
                     info["message"],
                     session_id=session_id,
                     cleanup=False,
                     platform_prompt=platform.inquiry_agent_prompt,
-                ):
+                )
+                if result.status == InquiryStatus.SENT:
                     sent_count += 1
+                elif result.status == InquiryStatus.LOGIN_REQUIRED:
+                    log.info(
+                        "Re-authenticating on %s after login prompt", platform_name
+                    )
+                    context_id = _authenticate_platform(platform)
+                    session_id = _create_agent_session(context_id)
+                    result = _retry_with_agent(
+                        info["thread_id"],
+                        info["product_url"],
+                        info["message"],
+                        session_id=session_id,
+                        cleanup=False,
+                        platform_prompt=platform.inquiry_agent_prompt,
+                    )
+                    if result.status == InquiryStatus.SENT:
+                        sent_count += 1
             continue
 
         # Pass 1: deterministic Playwright flow (threaded)
@@ -352,14 +379,30 @@ def send_outreach(agent_only: bool = False) -> int:
                 len(failed),
             )
             for info in failed:
-                if _retry_with_agent(
+                result = _retry_with_agent(
                     info["thread_id"],
                     info["product_url"],
                     info["message"],
                     session_id=info["session_id"],
                     platform_prompt=platform.inquiry_agent_prompt,
-                ):
+                )
+                if result.status == InquiryStatus.SENT:
                     sent_count += 1
+                elif result.status == InquiryStatus.LOGIN_REQUIRED:
+                    log.info(
+                        "Re-authenticating on %s after login prompt", platform_name
+                    )
+                    context_id = _authenticate_platform(platform)
+                    session_id = _create_agent_session(context_id)
+                    result = _retry_with_agent(
+                        info["thread_id"],
+                        info["product_url"],
+                        info["message"],
+                        session_id=session_id,
+                        platform_prompt=platform.inquiry_agent_prompt,
+                    )
+                    if result.status == InquiryStatus.SENT:
+                        sent_count += 1
 
     log.info("Stage 3 complete: %d inquiries sent", sent_count)
     return sent_count
