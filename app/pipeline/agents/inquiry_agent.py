@@ -77,8 +77,7 @@ _I18N_PATTERN = re.compile(r'"intl-|gangesweb|"i18n')
 def _strip_i18n(output: str) -> str:
     """Remove i18n/localisation noise lines from snapshot output."""
     return "\n".join(
-        line for line in output.splitlines()
-        if not _I18N_PATTERN.search(line)
+        line for line in output.splitlines() if not _I18N_PATTERN.search(line)
     )
 
 
@@ -94,7 +93,6 @@ class InquiryResult(BaseModel):
         default="",
         description="Explanation if failed or wholesale, empty on success",
     )
-
 
 
 def _make_tools(session_id: str) -> list[Tool]:
@@ -116,7 +114,11 @@ def _make_tools(session_id: str) -> list[Tool]:
         args = [BROWSE_BIN, "--connect", session_id] + parts
         log.info("browse CLI: %s", " ".join(args[2:]))
         result = subprocess.run(
-            args, capture_output=True, text=True, timeout=60, env=env,
+            args,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
         )
         output = result.stdout
         if result.returncode != 0 and result.stderr:
@@ -139,7 +141,7 @@ def send_inquiry_via_agent(
 ) -> InquiryResult:
     """Recover a failed inquiry using an LLM agent with browse CLI tools."""
     agent = Agent(
-        model=get_model(model_settings.CHEAP),
+        model=get_model(model_settings.MODERATE),
         system_prompt=SYSTEM_PROMPT,
         output_type=InquiryResult,
         tools=_make_tools(session_id),
