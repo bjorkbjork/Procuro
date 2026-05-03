@@ -125,8 +125,10 @@ def _triage_single_thread(gmail_thread_id: str):
     # Check tier 0: known supplier thread
     known_threads = _get_known_gmail_threads()
     if gmail_thread_id in known_threads:
-        log.info("  RESULT: Known supplier thread %d — would record reply directly",
-                 known_threads[gmail_thread_id])
+        log.info(
+            "  RESULT: Known supplier thread %d — would record reply directly",
+            known_threads[gmail_thread_id],
+        )
         return
 
     # Check tier 1: ignore list
@@ -138,21 +140,17 @@ def _triage_single_thread(gmail_thread_id: str):
     # Check tier 2: no-reply + platform notification
     if _is_no_reply_sender(sender_name, sender_email):
         if _is_platform_notification(subject, body):
-            log.info("  RESULT: Platform notification from no-reply sender — would archive")
+            log.info(
+                "  RESULT: Platform notification from no-reply sender — would archive"
+            )
             return
-        log.info("  No-reply sender but not a recognized notification — falling through to LLM")
+        log.info(
+            "  No-reply sender but not a recognized notification — falling through to LLM"
+        )
 
     # Tier 3: LLM triage
-    from unittest.mock import patch as _patch
-    intercepted: list[str] = []
-    def _dry_add_ignore(address: str) -> str:
-        intercepted.append(address)
-        log.info("    [dry-run] LLM called add_ignore_email(%s) — blocked", address)
-        return f"[dry-run] Would add {address} to ignore list"
-
-    with _patch("app.pipeline.stages.s4_inbox_triage._add_ignore_email", _dry_add_ignore):
-        result = _triage_with_llm(sender_name, sender_email, subject, body)
-    log.info("  RESULT (LLM triage): (tool calls intercepted: %d)", len(intercepted))
+    result = _triage_with_llm(sender_name, sender_email, subject, body)
+    log.info("  RESULT (LLM triage):")
     log.info("    Action: %s", result.action)
     log.info("    Thread ID match: %s", result.thread_id)
     log.info("    Summary: %s", result.summary)
@@ -197,12 +195,19 @@ def _triage_dry_run():
             subject = _extract_subject(latest)
             body = _extract_body(latest)
 
-            log.info("[%s] From: %s <%s>  Subject: %s",
-                     gmail_thread_id, sender_name, sender_email, subject)
+            log.info(
+                "[%s] From: %s <%s>  Subject: %s",
+                gmail_thread_id,
+                sender_name,
+                sender_email,
+                subject,
+            )
 
             if gmail_thread_id in known_threads:
-                log.info("  → Known supplier thread %d — would record reply",
-                         known_threads[gmail_thread_id])
+                log.info(
+                    "  → Known supplier thread %d — would record reply",
+                    known_threads[gmail_thread_id],
+                )
                 continue
 
             if sender_email in ignore_emails:
@@ -213,19 +218,12 @@ def _triage_dry_run():
                 if _is_platform_notification(subject, body):
                     log.info("  → Platform notification — would archive")
                     continue
-                log.info("  No-reply sender, not a known notification — falling through to LLM")
+                log.info(
+                    "  No-reply sender, not a known notification — falling through to LLM"
+                )
 
-            from unittest.mock import patch as _patch
-            intercepted: list[str] = []
-            def _dry_add_ignore(address: str) -> str:
-                intercepted.append(address)
-                log.info("    [dry-run] LLM called add_ignore_email(%s) — blocked", address)
-                return f"[dry-run] Would add {address} to ignore list"
-
-            with _patch("app.pipeline.stages.s4_inbox_triage._add_ignore_email", _dry_add_ignore):
-                result = _triage_with_llm(sender_name, sender_email, subject, body)
-            log.info("  → LLM: action=%s thread_id=%s (tool calls intercepted: %d)",
-                     result.action, result.thread_id, len(intercepted))
+            result = _triage_with_llm(sender_name, sender_email, subject, body)
+            log.info("  → LLM: action=%s thread_id=%s", result.action, result.thread_id)
             log.info("    Summary: %s", result.summary)
             log.info("    Reason: %s", result.reason)
 
@@ -288,7 +286,12 @@ def _negotiate_single_thread(thread_id: int, dry_run: bool = False):
         for m in messages:
             session.expunge(m)
 
-    log.info("DRY RUN — Thread %d (state=%s, rounds=%d)", thread_id, state, negotiation_rounds)
+    log.info(
+        "DRY RUN — Thread %d (state=%s, rounds=%d)",
+        thread_id,
+        state,
+        negotiation_rounds,
+    )
 
     # Spec check on first reply (round 0)
     if state == "AWAITING_REPLY" and negotiation_rounds == 0:
@@ -299,7 +302,11 @@ def _negotiate_single_thread(thread_id: int, dry_run: bool = False):
             candidate_title=supplier_title,
             candidate_details=supplier_specs,
         )
-        log.info("  Spec check result: match=%s confidence=%.2f", result.is_match, result.confidence)
+        log.info(
+            "  Spec check result: match=%s confidence=%.2f",
+            result.is_match,
+            result.confidence,
+        )
         log.info("  Reasoning: %s", result.reasoning)
         if result.key_differences:
             log.info("  Key differences: %s", result.key_differences)
@@ -325,11 +332,17 @@ def _negotiate_single_thread(thread_id: int, dry_run: bool = False):
 
     log.info("  Negotiation result:")
     log.info("    Action: %s", result.action)
-    log.info("    Reply text: %s", result.reply_text[:500] if result.reply_text else "(none)")
+    log.info(
+        "    Reply text: %s", result.reply_text[:500] if result.reply_text else "(none)"
+    )
     log.info("    Reasoning: %s", result.reasoning)
     eq = result.extracted_quote
-    log.info("    Extracted quote: price_usd=%s moq=%s lead_time=%s",
-             eq.price_usd, eq.moq, eq.lead_time)
+    log.info(
+        "    Extracted quote: price_usd=%s moq=%s lead_time=%s",
+        eq.price_usd,
+        eq.moq,
+        eq.lead_time,
+    )
     if eq.currency_note:
         log.info("    Currency note: %s", eq.currency_note)
 

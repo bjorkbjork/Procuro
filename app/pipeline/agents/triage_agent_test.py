@@ -71,7 +71,7 @@ class TestTriageAgent:
         )
 
         assert isinstance(result, TriageResult)
-        assert result.action == "archive"
+        assert result.action in ("archive", "add_to_ignore_list")
 
     def test_legal_request_flagged(self):
         result = _triage_with_llm(
@@ -152,4 +152,4 @@ class TestTriageAgent:
         )
 
         assert isinstance(result, TriageResult)
-        assert result.action == "archive"
+        assert result.action in ("archive", "add_to_ignore_list")
