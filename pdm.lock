@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform"]
 lock_version = "4.5.0"
-content_hash = "sha256:29e5e76a2a060b81a076ead55664c21b9bc9d7f50726ca46a357a20309262ba8"
+content_hash = "sha256:5f36404f86dcf1433d25ad44a6fbfcce3dd4132236a60f7da49f110aee3692d5"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -1674,15 +1674,6 @@ dependencies = [
 files = [
     {file = "psycopg-3.3.4-py3-none-any.whl", hash = "sha256:b6bbc25ccf05c8fad3b061d9db2ef0909a555171b84b07f29458a447253d679a"},
     {file = "psycopg-3.3.4.tar.gz", hash = "sha256:e21207764952cff81b6b8bdacad9a3939f2793367fdac2987b3aac36a651b5bc"},
-]
-
-[[package]]
-name = "psycopg2"
-version = "2.9.12"
-summary = ""
-files = [
-    {file = "psycopg2-2.9.12-cp312-cp312-win_amd64.whl", hash = "sha256:83d48e66e18c301d832e93c984a7bcbc0f4ac3bb79e2137e3bc335978c756dc0"},
-    {file = "psycopg2-2.9.12.tar.gz", hash = "sha256:1dedb1c7a1d8552c4a6044c6b1c41a52e6a8e2d144af83eccac758076b1b7c15"},
 ]
 
 [[package]]
