@@ -34,7 +34,7 @@ def _round1_history() -> list[ModelMessage]:
                 TextPart(
                     content=(
                         "Hi, we are a major Australian distributor with high-volume annual"
-                        " sales. We are sourcing 75\" QLED 4K TVs and would like to"
+                        ' sales. We are sourcing 75" QLED 4K TVs and would like to'
                         " discuss FOB pricing for large volumes. Could you share your"
                         " best pricing?"
                     ),
@@ -52,7 +52,7 @@ def _multi_round_history() -> list[ModelMessage]:
             parts=[
                 TextPart(
                     content=(
-                        "Hi, we are sourcing 75\" QLED TVs for our Australian retail"
+                        'Hi, we are sourcing 75" QLED TVs for our Australian retail'
                         " channels. Could you share FOB pricing for volume orders?"
                     ),
                 ),
@@ -63,7 +63,7 @@ def _multi_round_history() -> list[ModelMessage]:
             parts=[
                 UserPromptPart(
                     content=(
-                        "Thank you for your inquiry. Our price for the 75\" QLED 4K TV"
+                        'Thank you for your inquiry. Our price for the 75" QLED 4K TV'
                         " is $200 FOB per unit, MOQ 300 units, 30-45 days lead time."
                     ),
                 ),
@@ -127,7 +127,7 @@ def _target_price_history() -> list[ModelMessage]:
             parts=[
                 TextPart(
                     content=(
-                        "We are sourcing 75\" QLED Smart TVs for our Australian retail"
+                        'We are sourcing 75" QLED Smart TVs for our Australian retail'
                         " network. We do very large volumes. Could you share your FOB"
                         " pricing?"
                     ),
@@ -147,7 +147,7 @@ class TestNegotiationAgent:
         result: NegotiationResult = negotiate(
             message_history=_round1_history(),
             latest_supplier_message=(
-                "Thank you for your inquiry. Our best FOB price for the 75\" QLED"
+                'Thank you for your inquiry. Our best FOB price for the 75" QLED'
                 " 4K Smart TV is $200 per unit. MOQ is 300 units. Lead time"
                 " 30-45 days."
             ),
@@ -241,7 +241,7 @@ class TestNegotiationAgent:
                 parts=[
                     TextPart(
                         content=(
-                            "Hi, we are sourcing 75\" QLED TVs for high-volume"
+                            'Hi, we are sourcing 75" QLED TVs for high-volume'
                             " Australian retail. Could you share FOB pricing?"
                         ),
                     ),
@@ -293,7 +293,7 @@ class TestNegotiationAgent:
         result: NegotiationResult = negotiate(
             message_history=_target_price_history(),
             latest_supplier_message=(
-                "Thank you for reaching out. Our FOB price for the 75\" QLED 4K"
+                'Thank you for reaching out. Our FOB price for the 75" QLED 4K'
                 " Smart TV is $250 per unit. MOQ 200 units."
             ),
             negotiation_rounds=0,

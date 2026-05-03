@@ -109,10 +109,14 @@ def _make_tools(session_id: str) -> list[Tool]:
         "BROWSERBASE_PROJECT_ID": browserbase_settings.BROWSERBASE_PROJECT_ID,
     }
 
-    def _run_browse(parts: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    def _run_browse(
+        parts: list[str], timeout: int = 60
+    ) -> subprocess.CompletedProcess[str]:
         args = [BROWSE_BIN, "--connect", session_id] + parts
         log.info("browse CLI: %s", " ".join(args[2:]))
-        return subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env)
+        return subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout, env=env
+        )
 
     def screenshot() -> BinaryContent:
         """Capture a screenshot of the current browser page."""

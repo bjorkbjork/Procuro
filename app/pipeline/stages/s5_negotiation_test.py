@@ -534,7 +534,9 @@ class TestProcessThreadEdgeCases:
         gmail = _mock_gmail()
 
         with (
-            patch("app.pipeline.stages.s5_negotiation.compare_products") as mock_compare,
+            patch(
+                "app.pipeline.stages.s5_negotiation.compare_products"
+            ) as mock_compare,
             patch(
                 "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
             ),
@@ -565,7 +567,9 @@ class TestProcessNegotiations:
         gmail = _mock_gmail()
 
         with (
-            patch("app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail),
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
+            ),
             patch(
                 "app.pipeline.stages.s5_negotiation.compare_products",
                 return_value=match_result,
@@ -609,7 +613,9 @@ class TestProcessNegotiations:
             return "replied"
 
         with (
-            patch("app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail),
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
+            ),
             patch(
                 "app.pipeline.stages.s5_negotiation._process_thread",
                 side_effect=failing_then_ok,

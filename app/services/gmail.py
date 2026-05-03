@@ -27,12 +27,7 @@ class GmailService:
         return result.get("threads", [])
 
     def get_thread(self, thread_id: str) -> dict:
-        return (
-            self.service.users()
-            .threads()
-            .get(userId="me", id=thread_id)
-            .execute()
-        )
+        return self.service.users().threads().get(userId="me", id=thread_id).execute()
 
     def send_email(self, to: str, subject: str, body: str) -> dict:
         msg = MIMEText(body)
@@ -46,9 +41,7 @@ class GmailService:
             .execute()
         )
 
-    def reply_to_thread(
-        self, thread_id: str, to: str, subject: str, body: str
-    ) -> dict:
+    def reply_to_thread(self, thread_id: str, to: str, subject: str, body: str) -> dict:
         msg = MIMEText(body)
         msg["to"] = to
         msg["subject"] = subject

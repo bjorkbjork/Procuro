@@ -39,7 +39,10 @@ def extract_specs(url: str) -> SourceProduct:
             product.specs = specs
         else:
             product = SourceProduct(
-                url=url, slug=slug, title=title, specs=specs,
+                url=url,
+                slug=slug,
+                title=title,
+                specs=specs,
             )
             session.add(product)
         session.commit()

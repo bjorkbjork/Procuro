@@ -90,13 +90,16 @@ def _try_slider_solve(page: Page) -> bool:
     if not handle_box or not track_box:
         return False
 
-    result = page.evaluate(_JS_SLIDER_DRAG, {
-        "handleSel": SLIDER_HANDLE,
-        "trackSel": SLIDER_TRACK,
-        "endOffset": random.randint(5, 15),
-        "steps": random.randint(60, 100),
-        "durationMs": random.randint(400, 700),
-    })
+    result = page.evaluate(
+        _JS_SLIDER_DRAG,
+        {
+            "handleSel": SLIDER_HANDLE,
+            "trackSel": SLIDER_TRACK,
+            "endOffset": random.randint(5, 15),
+            "steps": random.randint(60, 100),
+            "durationMs": random.randint(400, 700),
+        },
+    )
 
     if not result:
         return False
@@ -147,9 +150,7 @@ def _wait_for_auto_solve(page: Page, state: CaptchaSolveState) -> bool:
     return False
 
 
-def _send_captcha_alert(
-    subject: str, message: str, session_url: str
-) -> None:
+def _send_captcha_alert(subject: str, message: str, session_url: str) -> None:
     body = (
         f"{message}\n\n"
         f"Solve the captcha here:\n{session_url}\n\n"
@@ -180,7 +181,10 @@ def _solve_slider_with_retry(page: Page) -> bool:
     Returns True if captcha was cleared (either by solve or by reload).
     Raises SliderSolveError to trigger stamina retry.
     """
-    if page.locator(SLIDER_HANDLE).count() == 0 or page.locator(SLIDER_TRACK).count() == 0:
+    if (
+        page.locator(SLIDER_HANDLE).count() == 0
+        or page.locator(SLIDER_TRACK).count() == 0
+    ):
         return False
 
     log.info("Slider captcha detected — attempting drag solve")

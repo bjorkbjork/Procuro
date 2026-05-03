@@ -34,9 +34,7 @@ class SheetsService:
 
     def get_spreadsheet_metadata(self) -> dict:
         return (
-            self.service.spreadsheets()
-            .get(spreadsheetId=self.spreadsheet_id)
-            .execute()
+            self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
         )
 
     def read_input_rows(self) -> list[dict]:
@@ -49,8 +47,14 @@ class SheetsService:
         rows = result.get("values", [])
         return [
             {
-                "url": row[INPUT_COLUMNS["url"]] if len(row) > INPUT_COLUMNS["url"] else "",
-                "status": row[INPUT_COLUMNS["status"]] if len(row) > INPUT_COLUMNS["status"] else "",
+                "url": (
+                    row[INPUT_COLUMNS["url"]] if len(row) > INPUT_COLUMNS["url"] else ""
+                ),
+                "status": (
+                    row[INPUT_COLUMNS["status"]]
+                    if len(row) > INPUT_COLUMNS["status"]
+                    else ""
+                ),
             }
             for row in rows
         ]
@@ -92,18 +96,22 @@ class SheetsService:
             spreadsheetId=self.spreadsheet_id,
             range=f"{OUTPUT_TAB}!A{sheet_row}:J{sheet_row}",
             valueInputOption="RAW",
-            body={"values": [[
-                data.get("source_product_title", ""),
-                data.get("source_link", ""),
-                data.get("source_slug", ""),
-                data.get("supplier_name", ""),
-                data.get("best_price_usd_fob", ""),
-                data.get("moq", ""),
-                data.get("lead_time", ""),
-                data.get("email_chain", ""),
-                data.get("last_updated_date", ""),
-                data.get("initial_outreach_date", ""),
-            ]]},
+            body={
+                "values": [
+                    [
+                        data.get("source_product_title", ""),
+                        data.get("source_link", ""),
+                        data.get("source_slug", ""),
+                        data.get("supplier_name", ""),
+                        data.get("best_price_usd_fob", ""),
+                        data.get("moq", ""),
+                        data.get("lead_time", ""),
+                        data.get("email_chain", ""),
+                        data.get("last_updated_date", ""),
+                        data.get("initial_outreach_date", ""),
+                    ]
+                ]
+            },
         ).execute()
 
     def upsert_output_row(self, data: dict) -> None:
@@ -131,14 +139,18 @@ class SheetsService:
                 break
         self.service.spreadsheets().batchUpdate(
             spreadsheetId=self.spreadsheet_id,
-            body={"requests": [{
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "dimension": "ROWS",
-                        "startIndex": idx + 1,  # +1 for header
-                        "endIndex": idx + 2,
+            body={
+                "requests": [
+                    {
+                        "deleteDimension": {
+                            "range": {
+                                "sheetId": sheet_id,
+                                "dimension": "ROWS",
+                                "startIndex": idx + 1,  # +1 for header
+                                "endIndex": idx + 2,
+                            }
+                        }
                     }
-                }
-            }]},
+                ]
+            },
         ).execute()

@@ -50,6 +50,7 @@ def main():
 
         # Log ALL network after submit
         log_all = [False]
+
         def on_request(request):
             if log_all[0]:
                 method = request.method
@@ -97,9 +98,7 @@ def main():
 
         step("Click submit via JS (logging ALL network)")
         log_all[0] = True
-        frame.evaluate(
-            "sel => document.querySelector(sel).click()", INQUIRY_SUBMIT
-        )
+        frame.evaluate("sel => document.querySelector(sel).click()", INQUIRY_SUBMIT)
         print("  JS click dispatched, waiting 5s...")
         time.sleep(5)
         log_all[0] = False

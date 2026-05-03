@@ -84,13 +84,16 @@ class NegotiationAction(StrEnum):
 
 class ExtractedQuote(BaseModel):
     price_usd: float | None = Field(
-        default=None, description="FOB price in USD per unit, if mentioned",
+        default=None,
+        description="FOB price in USD per unit, if mentioned",
     )
     moq: int | None = Field(
-        default=None, description="Minimum order quantity, if mentioned",
+        default=None,
+        description="Minimum order quantity, if mentioned",
     )
     lead_time: str | None = Field(
-        default=None, description="Lead time (e.g. '30-45 days'), if mentioned",
+        default=None,
+        description="Lead time (e.g. '30-45 days'), if mentioned",
     )
     currency_note: str | None = Field(
         default=None,
