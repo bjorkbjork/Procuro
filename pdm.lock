@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:6e79afc1fa6eccaabdf9c04d786a4c3d90b7f5491bc8878af60c5cf5e467f8c6"
+content_hash = "sha256:17eb192703eb1bf9e0895cd540be81e90abfaad635b6f1eebc809bc51952e403"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -583,22 +583,6 @@ summary = ""
 files = [
     {file = "executing-2.2.1-py2.py3-none-any.whl", hash = "sha256:760643d3452b4d777d295bb167ccc74c64a81df23fb5e08eff250c425a4b2017"},
     {file = "executing-2.2.1.tar.gz", hash = "sha256:3632cc370565f6648cc328b32435bd120a1e4ebb20c77e3fdde9a13cd1e533c4"},
-]
-
-[[package]]
-name = "fastapi"
-version = "0.136.1"
-summary = ""
-dependencies = [
-    "annotated-doc",
-    "pydantic",
-    "starlette",
-    "typing-extensions",
-    "typing-inspection",
-]
-files = [
-    {file = "fastapi-0.136.1-py3-none-any.whl", hash = "sha256:a6e9d7eeada96c93a4d69cb03836b44fa34e2854accb7244a1ece36cd4781c3f"},
-    {file = "fastapi-0.136.1.tar.gz", hash = "sha256:7af665ad7acfa0a3baf8983d393b6b471b9da10ede59c60045f49fbc89a0fa7f"},
 ]
 
 [[package]]
