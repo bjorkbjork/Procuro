@@ -14,6 +14,7 @@ Usage:
     pdm run python run_pipeline.py stage5 --dry-run
     pdm run python run_pipeline.py stage5 --thread <id> --dry-run
     pdm run python run_pipeline.py stage6
+    pdm run python run_pipeline.py test-outreach <alibaba_url>
     pdm run python run_pipeline.py status [source_product_id]
 """
 
@@ -424,6 +425,105 @@ def cmd_status(args):
             )
 
 
+def cmd_test_outreach(args):
+    from app.pipeline.agents.inquiry_agent import send_inquiry_via_agent
+    from app.pipeline.stages.s3_outreach import (
+        _authenticate_platform,
+        _create_agent_session,
+        _detach_browser,
+        _release_session,
+    )
+    from app.services.browser import BrowserSession
+    from app.services.platforms.alibaba import Platform
+
+    platform = Platform()
+    message = (
+        "Hi, we are a leading Australian distributor interested in this product. "
+        "Could you please provide your best FOB pricing, MOQ, and lead time? "
+        "For further correspondence please contact us at "
+        f"{args.email or 'sourcing.agent@example.com'}. Thanks, the agent."
+    )
+
+    log.info("Authenticating on Alibaba...")
+    context_id = _authenticate_platform(platform)
+    log.info("Auth context saved.")
+
+    if args.agent:
+        from app.pipeline.agents.inquiry_agent import InquiryStatus
+
+        session_id = _create_agent_session(context_id)
+        log.info("Agent session: %s", session_id)
+        log.info("Sending test inquiry via agent to %s", args.url)
+        try:
+            result = send_inquiry_via_agent(
+                session_id,
+                args.url,
+                message,
+                cleanup=False,
+                platform_prompt=platform.inquiry_agent_prompt,
+            )
+            log.info("Result: status=%s reason=%s", result.status, result.reason)
+            if result.status == InquiryStatus.LOGIN_REQUIRED:
+                _release_session(session_id)
+                log.info("Re-authenticating after login prompt...")
+                context_id = _authenticate_platform(platform)
+                session_id = _create_agent_session(context_id)
+                result = send_inquiry_via_agent(
+                    session_id,
+                    args.url,
+                    message,
+                    cleanup=False,
+                    platform_prompt=platform.inquiry_agent_prompt,
+                )
+                log.info(
+                    "Retry result: status=%s reason=%s", result.status, result.reason
+                )
+        except Exception:
+            log.exception("Agent failed")
+        finally:
+            _release_session(session_id)
+    else:
+        log.info("Sending test inquiry (deterministic) to %s", args.url)
+        browser = BrowserSession(
+            proxy_country="AU",
+            context_id=context_id,
+            keep_alive=True,
+        )
+        browser.__enter__()
+        session_id = browser.session_id
+        try:
+            success = platform.send_inquiry(browser.page, args.url, message)
+            if success:
+                log.info("Inquiry sent successfully")
+            else:
+                log.warning("Inquiry not confirmed — retrying with agent")
+                _detach_browser(browser)
+                result = send_inquiry_via_agent(
+                    session_id,
+                    args.url,
+                    message,
+                    cleanup=False,
+                    platform_prompt=platform.inquiry_agent_prompt,
+                )
+                log.info("Result: status=%s reason=%s", result.status, result.reason)
+                _release_session(session_id)
+                return
+        except Exception:
+            log.exception("Deterministic flow failed — retrying with agent")
+            _detach_browser(browser)
+            result = send_inquiry_via_agent(
+                session_id,
+                args.url,
+                message,
+                cleanup=False,
+                platform_prompt=platform.inquiry_agent_prompt,
+            )
+            log.info("Result: status=%s reason=%s", result.status, result.reason)
+            _release_session(session_id)
+            return
+        browser.__exit__(None, None, None)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run pipeline stages incrementally")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -487,6 +587,18 @@ def main():
 
     s6 = sub.add_parser("stage6", help="Update output Google Sheet")
     s6.set_defaults(func=cmd_stage6)
+
+    to = sub.add_parser(
+        "test-outreach", help="Test inquiry against any Alibaba URL (no DB)"
+    )
+    to.add_argument("url", help="Alibaba product URL")
+    to.add_argument("--email", help="Contact email to include in message")
+    to.add_argument(
+        "--agent",
+        action="store_true",
+        help="Skip deterministic flow, go direct to LLM agent",
+    )
+    to.set_defaults(func=cmd_test_outreach)
 
     st = sub.add_parser("status", help="Show pipeline status")
     st.add_argument("source_product_id", type=int, nargs="?", default=None)

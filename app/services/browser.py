@@ -2,6 +2,7 @@
 optional geo-proxying and automatic captcha handling on every navigation."""
 
 import logging
+import time
 
 from browserbase import Browserbase
 from playwright.sync_api import Browser, Page, Response, sync_playwright
@@ -18,6 +19,26 @@ def create_context() -> str:
     ctx = bb.contexts.create(project_id=browserbase_settings.BROWSERBASE_PROJECT_ID)
     log.info("Created Browserbase context %s", ctx.id)
     return ctx.id
+
+
+def wait_for_session_complete(session_id: str, timeout: float = 30.0) -> None:
+    """Poll until a Browserbase session reaches COMPLETED status.
+
+    Context cookies are only persisted once the session fully completes,
+    so any session that wrote to a persist-context must be awaited before
+    the next session reads from that context.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = bb.sessions.retrieve(session_id).status
+        if status == "COMPLETED":
+            log.info("Session %s completed", session_id)
+            return
+        if status in ("ERROR", "TIMED_OUT"):
+            log.warning("Session %s ended with status %s", session_id, status)
+            return
+        time.sleep(1)
+    log.warning("Timed out waiting for session %s to complete", session_id)
 
 
 class BrowserSession:

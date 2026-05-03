@@ -18,11 +18,22 @@ from enum import Enum
 
 import stamina
 from pydantic import BaseModel, Field
-from pydantic_ai import ModelRetry, Tool
-from pydantic_ai.messages import BinaryContent
+from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
+from pydantic_ai.messages import BinaryContent, ModelMessage
+
+from playwright.sync_api import sync_playwright
 
 from app.base.config import PROJECT_ROOT, browserbase_settings, model_settings
 from app.base.llm import EVICTION_DIR, Agent, get_model
+from app.services.browser import bb
+from app.services.platforms.alibaba.service import (
+    INQUIRY_SUBMIT,
+    INQUIRY_TEXTAREA,
+    _JS_FILL_AND_SUBMIT,
+    _get_inquiry_frame,
+    _wait_for_submit_confirmation,
+    SUBMIT_CONFIRM_TIMEOUT,
+)
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +88,10 @@ with a blob ID. Use the eviction tools to explore:
 5. If a selector doesn't work, use `snapshot` to get the accessibility tree \
    and then `click @<ref>` with the ref number.
 
+**submit_inquiry_iframe** — once the inquiry modal is open, call this to fill \
+and submit the form inside the iframe. This handles the iframe boundary that \
+normal CSS selectors can't cross. Pass the exact inquiry message as the argument.
+
 **IMPORTANT**: Do NOT use `click_xy` for buttons, links, or form elements — \
 coordinates from screenshots are unreliable. Use text/CSS selectors or \
 snapshot refs instead. Reserve `click_xy` only for captcha sliders or drag \
@@ -89,6 +104,9 @@ When done, you MUST call the `finish` tool with the outcome:
   (e.g. a success message, "Your inquiry has been sent", the form disappeared \
   after clicking Send, or the page navigated to a confirmation).
 - **WHOLESALE** — if you see a "Start order" button but no inquiry option.
+- **LOGIN_REQUIRED** — if the page shows a login/sign-in form, "Continue with \
+  Google", or any authentication prompt. Do NOT attempt to log in yourself — \
+  call finish immediately with LOGIN_REQUIRED so the system can re-authenticate.
 - **FAILED** — if you can't complete the inquiry. Include a reason.
 
 Never assume success. If you're unsure whether the inquiry was sent, take a \
@@ -116,6 +134,7 @@ def _strip_i18n(output: str) -> str:
 class InquiryStatus(str, Enum):
     SENT = "SENT"
     WHOLESALE = "WHOLESALE"
+    LOGIN_REQUIRED = "LOGIN_REQUIRED"
     FAILED = "FAILED"
 
 
@@ -236,11 +255,61 @@ def _make_tools(session_id: str, result_holder: list[InquiryResult]) -> list[Too
 
         return output
 
+    def submit_inquiry_iframe(message: str) -> str:
+        """Fill and submit the Alibaba inquiry iframe form. Call this once the
+        inquiry modal is open (after clicking the page-level Send Inquiry button).
+        Connects directly to the browser session, finds the iframe, fills the
+        message, and clicks submit.
+
+        Args:
+            message: The inquiry message to send.
+        """
+        log.info("submit_inquiry_iframe: connecting to session %s", session_id)
+        connect_url = bb.sessions.retrieve(session_id).connect_url
+        pw = sync_playwright().start()
+        try:
+            browser = pw.chromium.connect_over_cdp(connect_url)
+            page = browser.contexts[0].pages[0]
+
+            frame = _get_inquiry_frame(page)
+            iframe_pattern = re.compile(r"message\.alibaba\.com")
+
+            result = frame.evaluate(
+                _JS_FILL_AND_SUBMIT,
+                {
+                    "textareaSel": INQUIRY_TEXTAREA,
+                    "submitSel": INQUIRY_SUBMIT,
+                    "message": message,
+                },
+            )
+
+            if not result.get("ok"):
+                return f"FAILED: {result.get('reason')} (step: {result.get('step')})"
+
+            if _wait_for_submit_confirmation(
+                page, iframe_pattern, SUBMIT_CONFIRM_TIMEOUT
+            ):
+                return "SUCCESS: inquiry submitted and confirmed"
+            return "UNCERTAIN: submit clicked but not confirmed"
+        except TimeoutError:
+            return "FAILED: inquiry iframe not found — is the modal open?"
+        except Exception as exc:
+            if "Execution context was destroyed" in str(exc):
+                return "SUCCESS: iframe navigated away (inquiry sent)"
+            return f"FAILED: {exc}"
+        finally:
+            browser.close()
+            pw.stop()
+
+    # We use a manual finish tool instead of PydanticAI structured output
+    # because structured output uses required tool_choice under the hood,
+    # which is incompatible with thinking mode on AWS Bedrock. Prompting
+    # the agent to call finish is good enough.
     def finish(status: InquiryStatus, reason: str = "") -> str:
         """Report the outcome of the inquiry attempt. You MUST call this when done.
 
         Args:
-            status: The outcome — SENT, WHOLESALE, or FAILED.
+            status: The outcome — SENT, WHOLESALE, LOGIN_REQUIRED, or FAILED.
             reason: Explanation (required for WHOLESALE/FAILED, optional for SENT).
         """
         result_holder.append(InquiryResult(status=status, reason=reason))
@@ -250,8 +319,32 @@ def _make_tools(session_id: str, result_holder: list[InquiryResult]) -> list[Too
     return [
         Tool(screenshot, takes_ctx=False),
         Tool(browse, takes_ctx=False),
+        Tool(submit_inquiry_iframe, takes_ctx=False),
         Tool(finish, takes_ctx=False),
     ]
+
+
+def _classify_from_history(
+    messages: list[ModelMessage], system_prompt: str
+) -> InquiryResult:
+    """Fallback: pass the agent's conversation to an identical agent with no
+    tools and structured output to classify the outcome."""
+    fallback = _BaseAgent(
+        model=get_model(model_settings.MODERATE),
+        system_prompt=system_prompt,
+        output_type=InquiryResult,
+        retries=2,
+    )
+    result = fallback.run_sync(
+        "You did not call finish. Based on your conversation above, classify the outcome now.",
+        message_history=messages,
+    )
+    log.info(
+        "Fallback classification: %s %s",
+        result.output.status,
+        result.output.reason[:200],
+    )
+    return result.output
 
 
 def send_inquiry_via_agent(
@@ -284,13 +377,11 @@ def send_inquiry_via_agent(
         f"Start with `screenshot` to see where the browser is stuck."
     )
 
-    agent.run_sync(prompt)
+    run_result = agent.run_sync(prompt)
 
     if not result_holder:
-        log.warning("Agent did not call finish for %s", product_url)
-        return InquiryResult(
-            status=InquiryStatus.FAILED, reason="Agent exited without calling finish"
-        )
+        log.warning("Agent did not call finish — running classification fallback")
+        return _classify_from_history(run_result.all_messages(), system_prompt)
 
     result = result_holder[-1]
     log.info(
