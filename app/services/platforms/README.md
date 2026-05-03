@@ -33,6 +33,10 @@ Each subdirectory is a supplier platform (Alibaba, GlobalSources, etc.). Platfor
 
    See `platform.py` for the full protocol definition and `alibaba/` for a working example.
 
-4. **Run a DB migration** (`alembic revision --autogenerate`) to update the platform check constraint.
+4. **Write a manual migration** to update the platform check constraint:
+   ```bash
+   alembic revision -m "add newplatform to check constraint"
+   ```
+   Then edit the generated file to drop and recreate the constraint with the new enum value. Alembic's autogenerate does not detect check-constraint changes — this is a known limitation ([PR #1811](https://github.com/sqlalchemy/alembic/pull/1811) submitted by me addresses this issue upstream).
 
 5. **No other changes needed.** Stage 2 and Stage 3 will pick up the new platform automatically via `get_platforms()`.
