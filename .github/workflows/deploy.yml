@@ -131,5 +131,7 @@ jobs:
             [ -n "$SOURCING_INTERVAL_MINUTES" ] && echo "SOURCING_INTERVAL_MINUTES=$SOURCING_INTERVAL_MINUTES" >> .env
             [ -n "$NEGOTIATION_INTERVAL_MINUTES" ] && echo "NEGOTIATION_INTERVAL_MINUTES=$NEGOTIATION_INTERVAL_MINUTES" >> .env
 
+            sudo docker compose down
+            sudo docker image prune -af
             sudo docker compose pull app
             sudo docker compose up -d
