@@ -14,6 +14,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 from app.base.config import scheduler_settings, settings
 from app.base.scheduler import scheduler
@@ -182,12 +183,14 @@ def register_jobs():
     sourcing_minutes = scheduler_settings.SOURCING_INTERVAL_MINUTES
     negotiation_minutes = scheduler_settings.NEGOTIATION_INTERVAL_MINUTES
 
+    now = datetime.now()
     scheduler.add_job(
         sourcing_pipeline,
         trigger="cron",
         minute=f"*/{sourcing_minutes}",
         id="sourcing_pipeline",
         replace_existing=True,
+        next_run_time=now,
     )
     scheduler.add_job(
         negotiation_pipeline,
@@ -205,6 +208,7 @@ def register_jobs():
         minute=f"*/{sourcing_minutes}",
         id="retry_stalled_outreach",
         replace_existing=True,
+        next_run_time=now,
     )
     log.info(
         "Registered jobs — sourcing every %d min, negotiation every %d min (cron-aligned)",
