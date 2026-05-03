@@ -48,7 +48,9 @@ def _fan_out(stage_name: str, func, items, *, max_workers=None, label=None):
 
     max_workers = max_workers or settings.MAX_WORKERS
     label = label or str
-    log.info("Stage %s: starting (%d items, %d workers)", stage_name, len(items), max_workers)
+    log.info(
+        "Stage %s: starting (%d items, %d workers)", stage_name, len(items), max_workers
+    )
     t0 = time.monotonic()
     results = []
 
@@ -69,7 +71,13 @@ def _fan_out(stage_name: str, func, items, *, max_workers=None, label=None):
 
     succeeded = sum(1 for _, r in results if r is not None)
     elapsed = time.monotonic() - t0
-    log.info("Stage %s: finished in %.1fs — %d/%d succeeded", stage_name, elapsed, succeeded, len(items))
+    log.info(
+        "Stage %s: finished in %.1fs — %d/%d succeeded",
+        stage_name,
+        elapsed,
+        succeeded,
+        len(items),
+    )
     return results
 
 
@@ -95,7 +103,12 @@ def sourcing_pipeline():
         return url.rstrip("/").rsplit("/", 1)[-1]
 
     url_to_item = {item["url"]: item for item in pending}
-    s1_results = _fan_out("1_spec_extraction", extract_specs, [i["url"] for i in pending], label=_slug_from_url)
+    s1_results = _fan_out(
+        "1_spec_extraction",
+        extract_specs,
+        [i["url"] for i in pending],
+        label=_slug_from_url,
+    )
 
     products = []
     for url, result in s1_results:
@@ -111,7 +124,12 @@ def sourcing_pipeline():
 
     # Stage 2: supplier search — fan out across products
     slug_by_id = {p.id: p.slug for p in products}
-    _fan_out("2_supplier_search", run_supplier_search, [p.id for p in products], label=lambda pid: slug_by_id[pid])
+    _fan_out(
+        "2_supplier_search",
+        run_supplier_search,
+        [p.id for p in products],
+        label=lambda pid: slug_by_id[pid],
+    )
 
     # Stage 3: outreach (has its own internal threading per platform group)
     _run_stage("3_outreach", send_outreach)
@@ -148,6 +166,9 @@ def register_jobs():
         negotiation_pipeline,
         trigger="cron",
         minute=f"*/{negotiation_minutes}",
+        hour="7-18",
+        day_of_week="mon-fri",
+        timezone="Australia/Sydney",
         id="negotiation_pipeline",
         replace_existing=True,
     )
@@ -160,6 +181,7 @@ def register_jobs():
 
 def main():
     from app.base.config import configure_logging
+
     configure_logging()
     log.info("Starting scheduler")
     register_jobs()
