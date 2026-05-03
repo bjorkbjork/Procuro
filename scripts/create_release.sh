@@ -53,7 +53,7 @@ if [ "$LATEST" = "v0.0.0" ]; then
 else
     release_notes_ref="HEAD...$LATEST"
 fi
-release_notes=$(git log --format=-\ %s "$release_notes_ref" . ':!infrastructure' ':!.github' ':!scripts')
+release_notes=$(git log --format=-\ %s "$release_notes_ref" -- . ':!infrastructure' ':!.github' ':!scripts')
 printf "%s\n\n%s" "$TAG" "$release_notes" | eval "$git_tag_cmd" -F - "$TAG"
 
 git push origin HEAD
