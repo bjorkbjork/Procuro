@@ -15,9 +15,8 @@ import re
 from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Tool
 
-from app.base.config import model_settings, settings
+from app.base.config import model_settings
 from app.base.llm import Agent, get_model
 from app.db.database import SessionLocal
 from app.db.models.keyvalue import KeyValue
@@ -145,7 +144,7 @@ def _is_platform_notification(subject: str, body: str) -> bool:
 
 class TriageResult(BaseModel):
     action: str = Field(
-        description="One of: 'reply_supplier', 'archive', 'flag_human'",
+        description="One of: 'reply_supplier', 'archive', 'add_to_ignore_list', 'flag_human'",
     )
     thread_id: int | None = Field(
         default=None,
@@ -175,11 +174,17 @@ Classify each email into one of these actions:
    specs, or negotiation. Set thread_id to the matching supplier thread. \
    Include a summary of what the supplier said (price, MOQ, lead time, etc.)
 
-2. **archive** — This is noise: marketing, newsletters, automated platform \
-   notifications, or irrelevant messages. If the sender should be permanently \
-   ignored, use the add_ignore_email tool BEFORE returning your result.
+2. **archive** — This is one-off noise that doesn't warrant permanently \
+   ignoring the sender (e.g. a one-time notification, an irrelevant but \
+   potentially legitimate sender).
 
-3. **flag_human** — You're unsure what this is, or it requires human attention \
+3. **add_to_ignore_list** — This is noise AND the sender should be permanently \
+   auto-archived in the future. Use for: recurring newsletters, automated \
+   billing/invoice senders, platform marketing, SaaS notifications, and any \
+   address that will never send sourcing-relevant content. Do NOT use for \
+   actual supplier email addresses.
+
+4. **flag_human** — You're unsure what this is, or it requires human attention \
    (e.g. legal request, account issue, something unexpected).
 
 Rules:
@@ -190,16 +195,6 @@ Rules:
 - Platform notifications about new messages should be archived (the actual \
   supplier message comes via email separately).
 - When in doubt, flag_human rather than archiving a real supplier reply."""
-
-
-def _make_triage_tools() -> list[Tool]:
-    def add_ignore_email(address: str) -> str:
-        """Add an email address to the permanent ignore list. Use this for
-        senders that should always be auto-archived (newsletters, notifications,
-        marketing). Do NOT add actual supplier email addresses."""
-        return _add_ignore_email(address)
-
-    return [Tool(add_ignore_email, takes_ctx=False)]
 
 
 def _get_active_threads_summary() -> str:
@@ -236,7 +231,6 @@ def _triage_with_llm(
         model=get_model(model_settings.CHEAP),
         system_prompt=TRIAGE_SYSTEM_PROMPT,
         output_type=TriageResult,
-        tools=_make_triage_tools(),
         retries=2,
     )
 
@@ -345,7 +339,8 @@ def triage_inbox() -> dict:
                 counts["supplier_reply"] += 1
                 log.info(
                     "Known thread %d — recorded reply and archived: %s",
-                    thread_id, subject[:60],
+                    thread_id,
+                    subject[:60],
                 )
                 continue
 
@@ -380,7 +375,16 @@ def triage_inbox() -> dict:
                 result.reason[:80],
             )
 
-            if result.action == "archive":
+            if result.action == "add_to_ignore_list":
+                _add_ignore_email(sender_email)
+                gmail.archive_thread(gmail_thread_id)
+                counts["archived_noise"] += 1
+                log.info(
+                    "Added %s to ignore list and archived",
+                    sender_email,
+                )
+
+            elif result.action == "archive":
                 gmail.archive_thread(gmail_thread_id)
                 counts["archived_noise"] += 1
 
