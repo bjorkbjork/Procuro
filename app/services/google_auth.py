@@ -114,11 +114,37 @@ def _on_challenge_page(page: Page) -> bool:
         return False
 
 
+AUTHENTICATOR_CHOOSER_SELECTORS = [
+    "[data-challengeindex][data-challengetype='6']",
+    "li:has-text('Google Authenticator')",
+    "div[role='link']:has-text('Authenticator')",
+    "div[data-challengeentry]:has-text('Authenticator')",
+    "ul li:has-text('Authenticator')",
+    ":text('Google Authenticator app')",
+]
+
+
+def _select_authenticator_option(page: Page) -> bool:
+    """On the 2-Step Verification chooser, click the Authenticator option."""
+    for selector in AUTHENTICATOR_CHOOSER_SELECTORS:
+        el = page.locator(selector)
+        if el.count() > 0 and el.first.is_visible():
+            log.info("Clicking Authenticator option on challenge chooser")
+            el.first.click()
+            page.wait_for_timeout(3_000)
+            return True
+    return False
+
+
 def _try_totp(page: Page) -> bool:
-    """If a TOTP input is visible and we have a secret, fill it. Returns True if handled."""
+    """If a TOTP input is visible and we have a secret, fill it. Returns True if handled.
+
+    If we're on the method chooser page, selects the Authenticator option first.
+    """
     if not settings.GOOGLE_TOTP_SECRET:
         return False
 
+    # Check if TOTP input is already visible
     for selector in TOTP_INPUT_SELECTORS:
         inp = page.locator(selector)
         if inp.count() > 0 and inp.first.is_visible():
@@ -129,6 +155,20 @@ def _try_totp(page: Page) -> bool:
             page.locator("button#totpNext, button:has-text('Next')").first.click()
             page.wait_for_timeout(3_000)
             return True
+
+    # Not visible — try clicking through the method chooser
+    if _select_authenticator_option(page):
+        for selector in TOTP_INPUT_SELECTORS:
+            inp = page.locator(selector)
+            if inp.count() > 0 and inp.first.is_visible():
+                secret = settings.GOOGLE_TOTP_SECRET.replace(" ", "")
+                code = pyotp.TOTP(secret).now()
+                log.info("Filling TOTP code after selecting Authenticator")
+                inp.first.fill(code)
+                page.locator("button#totpNext, button:has-text('Next')").first.click()
+                page.wait_for_timeout(3_000)
+                return True
+
     return False
 
 
@@ -181,6 +221,16 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
         try:
             if not totp_attempted and _try_totp(page):
                 totp_attempted = True
+                log.info("TOTP submitted — waiting for challenge to clear")
+                for _ in range(30):
+                    if page.is_closed():
+                        log.info("Auth popup closed after TOTP — login resolved")
+                        return
+                    if not _on_challenge_page(page):
+                        log.info("Challenge cleared after TOTP")
+                        return
+                    page.wait_for_timeout(1_000)
+                log.warning("Challenge page still present 30s after TOTP")
                 continue
         except PlaywrightError:
             log.info("Auth popup closed during TOTP check — login resolved")
@@ -190,6 +240,7 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
             description = _get_challenge_description(page)
             log.warning("Google auth challenge requires manual action: %s", description)
             from app.services.gmail import GmailService
+
             gmail = GmailService()
             gmail.send_email(
                 to=settings.MAINTAINER_EMAIL_ADDRESS,
@@ -206,7 +257,9 @@ def _handle_auth_challenges(page: Page, session_url: str) -> None:
 
         time.sleep(CHALLENGE_POLL_INTERVAL)
 
-    raise RuntimeError("Google auth challenge not resolved within %ds" % CHALLENGE_TIMEOUT)
+    raise RuntimeError(
+        "Google auth challenge not resolved within %ds" % CHALLENGE_TIMEOUT
+    )
 
 
 def google_login(page: Page, session_url: str = "") -> None:
@@ -238,10 +291,16 @@ def _log_page_state(page, step: str) -> None:
         if a.is_visible() and a.text_content().strip()
     ]
     checkboxes = page.locator('input[type="checkbox"]')
-    cb_count = sum(1 for i in range(checkboxes.count()) if checkboxes.nth(i).is_visible())
+    cb_count = sum(
+        1 for i in range(checkboxes.count()) if checkboxes.nth(i).is_visible()
+    )
     log.info(
         "[%s] url=%s buttons=%s links=%s checkboxes=%d",
-        step, page.url[:100], buttons, links, cb_count,
+        step,
+        page.url[:100],
+        buttons,
+        links,
+        cb_count,
     )
 
 
@@ -267,9 +326,7 @@ def _authenticate_via_browser() -> Credentials:
 
         google_login(page)
 
-        page.locator('a:has-text("Advanced")').wait_for(
-            state="visible", timeout=30_000
-        )
+        page.locator('a:has-text("Advanced")').wait_for(state="visible", timeout=30_000)
         _log_page_state(page, "warning_page")
 
         page.locator('a:has-text("Advanced")').click()
