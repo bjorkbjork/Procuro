@@ -17,8 +17,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "dependencies": {
+    "@browserbasehq/browse-cli": "^0.6.0"
+  },
   "devDependencies": {
-    "@browserbasehq/browse-cli": "^0.6.0",
-    "@browserbasehq/cli": "^0.5.7"
+    "@browserbasehq/cli": "^0.5.7",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0"
   }
 }
