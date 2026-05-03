@@ -1,0 +1,9 @@
+.git
+.venv
+.beads
+.claude
+__pycache__
+node_modules
+*.pyc
+.env
+*.pem
