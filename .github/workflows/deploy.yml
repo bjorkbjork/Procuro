@@ -26,18 +26,15 @@ jobs:
           echo "Deploying $TAG"
           git checkout "$TAG"
 
-      - name: Package release
-        run: tar czf /tmp/release.tar.gz --exclude='.git' --exclude='node_modules' --exclude='.venv' --exclude='__pycache__' .
-
       - name: Copy to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: /tmp/release.tar.gz
-          target: /tmp
-          strip_components: 0
+          source: "app,alembic,alembic.ini,pyproject.toml,pdm.lock,package.json,package-lock.json,Dockerfile,docker-compose.yml,entrypoint.sh,scripts"
+          target: ~/sourcingAgent
+          rm: true
 
       - name: Deploy
         uses: appleboy/ssh-action@v1
@@ -85,9 +82,6 @@ jobs:
               sudo usermod -aG docker $USER
             fi
 
-            mkdir -p ~/sourcingAgent
-            tar xzf /tmp/release.tar.gz -C ~/sourcingAgent
-            rm /tmp/release.tar.gz
             cd ~/sourcingAgent
 
             > .env
