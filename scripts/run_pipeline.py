@@ -190,7 +190,7 @@ def _triage_dry_run():
             body = _extract_body(latest)
 
             log.info("[%s] From: %s <%s>  Subject: %s",
-                     gmail_thread_id, sender_name, sender_email, subject[:60])
+                     gmail_thread_id, sender_name, sender_email, subject)
 
             if gmail_thread_id in known_threads:
                 log.info("  → Known supplier thread %d — would record reply",
@@ -208,8 +208,9 @@ def _triage_dry_run():
                 log.info("  No-reply sender, not a known notification — falling through to LLM")
 
             result = _triage_with_llm(sender_name, sender_email, subject, body)
-            log.info("  → LLM: action=%s thread_id=%s — %s",
-                     result.action, result.thread_id, result.reason[:100])
+            log.info("  → LLM: action=%s thread_id=%s", result.action, result.thread_id)
+            log.info("    Summary: %s", result.summary)
+            log.info("    Reason: %s", result.reason)
 
         except Exception:
             log.exception("Error triaging gmail thread %s", gmail_thread_id)
