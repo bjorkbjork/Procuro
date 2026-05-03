@@ -2,22 +2,16 @@
 tests state transitions, quote recording, spec check gating, reply delays,
 and the silence/close paths."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from app.agent.match_agent import MatchResult
-from app.agent.negotiation_agent import (
+import pytest
+
+from app.pipeline.agents.match_agent import MatchResult
+from app.pipeline.agents.negotiation_agent import (
     ExtractedQuote,
     NegotiationAction,
     NegotiationResult,
-)
-from app.agent.stage_five_negotiation import (
-    _get_ready_threads,
-    _process_thread,
-    _record_quote,
-    _run_spec_check,
-    process_negotiations,
 )
 from app.db.database import SessionLocal
 from app.db.models.message import Message
@@ -26,6 +20,13 @@ from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
+from app.pipeline.stages.s5_negotiation import (
+    _get_ready_threads,
+    _process_thread,
+    _record_quote,
+    _run_spec_check,
+    process_negotiations,
+)
 
 
 @pytest.fixture
@@ -35,8 +36,8 @@ def thread_awaiting_reply():
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-negotiate/",
             slug="test-negotiate",
-            title="Test 75\" QLED TV",
-            specs={"Display": {"Size": "75\"", "Type": "QLED", "Resolution": "4K"}},
+            title='Test 75" QLED TV',
+            specs={"Display": {"Size": '75"', "Type": "QLED", "Resolution": "4K"}},
         )
         session.add(source)
         session.flush()
@@ -71,19 +72,23 @@ def thread_awaiting_reply():
         session.add(thread)
         session.flush()
 
-        session.add(Message(
-            thread_id=thread.id,
-            direction="outbound",
-            subject="Initial outreach",
-            body="We are looking to source a 75 inch QLED TV...",
-        ))
-        session.add(Message(
-            thread_id=thread.id,
-            direction="inbound",
-            gmail_message_id="gmsg_supplier_reply_1",
-            subject="Re: Product Inquiry",
-            body="Thank you for your inquiry. Our best price is $200 FOB, MOQ 300.",
-        ))
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="outbound",
+                subject="Initial outreach",
+                body="We are looking to source a 75 inch QLED TV...",
+            )
+        )
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="inbound",
+                gmail_message_id="gmsg_supplier_reply_1",
+                subject="Re: Product Inquiry",
+                body="Thank you for your inquiry. Our best price is $200 FOB, MOQ 300.",
+            )
+        )
         session.commit()
         session.refresh(thread)
         thread_id = thread.id
@@ -146,24 +151,40 @@ def thread_negotiating():
         session.add(thread)
         session.flush()
 
-        session.add(Message(
-            thread_id=thread.id, direction="outbound",
-            subject="Initial outreach", body="Looking for 45L air fryer...",
-        ))
-        session.add(Message(
-            thread_id=thread.id, direction="inbound",
-            gmail_message_id="gmsg_r2_1",
-            subject="Re: Inquiry", body="Price $50 FOB, MOQ 1000",
-        ))
-        session.add(Message(
-            thread_id=thread.id, direction="outbound",
-            subject="Re: Inquiry", body="That's too high, we need better pricing.",
-        ))
-        session.add(Message(
-            thread_id=thread.id, direction="inbound",
-            gmail_message_id="gmsg_r2_2",
-            subject="Re: Inquiry", body="Best we can do is $42 FOB",
-        ))
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="outbound",
+                subject="Initial outreach",
+                body="Looking for 45L air fryer...",
+            )
+        )
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="inbound",
+                gmail_message_id="gmsg_r2_1",
+                subject="Re: Inquiry",
+                body="Price $50 FOB, MOQ 1000",
+            )
+        )
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="outbound",
+                subject="Re: Inquiry",
+                body="That's too high, we need better pricing.",
+            )
+        )
+        session.add(
+            Message(
+                thread_id=thread.id,
+                direction="inbound",
+                gmail_message_id="gmsg_r2_2",
+                subject="Re: Inquiry",
+                body="Best we can do is $42 FOB",
+            )
+        )
         session.commit()
         session.refresh(thread)
         thread_id = thread.id
@@ -187,14 +208,16 @@ def _mock_gmail():
     mock = MagicMock()
     mock.reply_to_thread.return_value = {"id": "gmsg_reply_out"}
     mock.get_thread.return_value = {
-        "messages": [{
-            "payload": {
-                "headers": [
-                    {"name": "From", "value": "sales@supplier-factory.cn"},
-                    {"name": "Subject", "value": "Re: Product Inquiry"},
-                ],
-            },
-        }],
+        "messages": [
+            {
+                "payload": {
+                    "headers": [
+                        {"name": "From", "value": "sales@supplier-factory.cn"},
+                        {"name": "Subject", "value": "Re: Product Inquiry"},
+                    ],
+                },
+            }
+        ],
     }
     return mock
 
@@ -240,10 +263,15 @@ class TestGetReadyThreads:
 class TestRunSpecCheck:
     def test_pass_sets_state(self, thread_awaiting_reply):
         match_result = MatchResult(
-            is_match=True, confidence=0.9,
-            reasoning="Specs match", key_differences=[],
+            is_match=True,
+            confidence=0.9,
+            reasoning="Specs match",
+            key_differences=[],
         )
-        with patch("app.agent.stage_five_negotiation.compare_products", return_value=match_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.compare_products",
+            return_value=match_result,
+        ):
             passed = _run_spec_check(thread_awaiting_reply)
 
         assert passed is True
@@ -253,10 +281,15 @@ class TestRunSpecCheck:
 
     def test_fail_sets_state(self, thread_awaiting_reply):
         match_result = MatchResult(
-            is_match=False, confidence=0.3,
-            reasoning="Wrong panel type", key_differences=["OLED vs QLED"],
+            is_match=False,
+            confidence=0.3,
+            reasoning="Wrong panel type",
+            key_differences=["OLED vs QLED"],
         )
-        with patch("app.agent.stage_five_negotiation.compare_products", return_value=match_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.compare_products",
+            return_value=match_result,
+        ):
             passed = _run_spec_check(thread_awaiting_reply)
 
         assert passed is False
@@ -274,7 +307,9 @@ class TestRecordQuote:
     def test_records_quote(self, thread_awaiting_reply):
         _record_quote(thread_awaiting_reply, 200.0, 300, "30-45 days")
         with SessionLocal() as session:
-            quotes = session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
+            quotes = (
+                session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
+            )
             assert len(quotes) == 1
             assert float(quotes[0].price_usd) == 200.0
             assert quotes[0].moq == 300
@@ -283,7 +318,9 @@ class TestRecordQuote:
     def test_skips_when_no_price(self, thread_awaiting_reply):
         _record_quote(thread_awaiting_reply, None, 300, "30 days")
         with SessionLocal() as session:
-            quotes = session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
+            quotes = (
+                session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
+            )
             assert len(quotes) == 0
 
 
@@ -295,12 +332,17 @@ class TestRecordQuote:
 class TestProcessThreadSpecCheck:
     def test_spec_fail_closes_thread(self, thread_awaiting_reply):
         match_result = MatchResult(
-            is_match=False, confidence=0.2,
-            reasoning="Wrong size", key_differences=["65 inch vs 75 inch"],
+            is_match=False,
+            confidence=0.2,
+            reasoning="Wrong size",
+            key_differences=["65 inch vs 75 inch"],
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.compare_products", return_value=match_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.compare_products",
+            return_value=match_result,
+        ):
             status = _process_thread(thread_awaiting_reply, gmail)
 
         assert status == "spec_check_fail"
@@ -311,8 +353,10 @@ class TestProcessThreadSpecCheck:
 
     def test_spec_pass_proceeds_to_negotiation(self, thread_awaiting_reply):
         match_result = MatchResult(
-            is_match=True, confidence=0.95,
-            reasoning="Good match", key_differences=[],
+            is_match=True,
+            confidence=0.95,
+            reasoning="Good match",
+            key_differences=[],
         )
         neg_result = NegotiationResult(
             action=NegotiationAction.REPLY,
@@ -322,8 +366,15 @@ class TestProcessThreadSpecCheck:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.compare_products", return_value=match_result), \
-             patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation.compare_products",
+                return_value=match_result,
+            ),
+            patch(
+                "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+            ),
+        ):
             status = _process_thread(thread_awaiting_reply, gmail)
 
         assert status == "replied"
@@ -350,7 +401,9 @@ class TestProcessThreadNegotiation:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+        ):
             status = _process_thread(thread_negotiating, gmail)
 
         assert status == "replied"
@@ -376,7 +429,9 @@ class TestProcessThreadNegotiation:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+        ):
             status = _process_thread(thread_negotiating, gmail)
 
         assert status == "silence"
@@ -395,7 +450,9 @@ class TestProcessThreadNegotiation:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+        ):
             status = _process_thread(thread_negotiating, gmail)
 
         assert status == "closed"
@@ -414,7 +471,9 @@ class TestProcessThreadNegotiation:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+        ):
             status = _process_thread(thread_negotiating, gmail)
 
         assert status == "closed"
@@ -430,13 +489,19 @@ class TestProcessThreadNegotiation:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with patch(
+            "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+        ):
             _process_thread(thread_negotiating, gmail)
 
         with SessionLocal() as session:
             outbound = (
                 session.query(Message)
-                .filter_by(thread_id=thread_negotiating, direction="outbound", gmail_message_id="gmsg_reply_out")
+                .filter_by(
+                    thread_id=thread_negotiating,
+                    direction="outbound",
+                    gmail_message_id="gmsg_reply_out",
+                )
                 .first()
             )
             assert outbound is not None
@@ -468,8 +533,12 @@ class TestProcessThreadEdgeCases:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.compare_products") as mock_compare, \
-             patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with (
+            patch("app.pipeline.stages.s5_negotiation.compare_products") as mock_compare,
+            patch(
+                "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+            ),
+        ):
             _process_thread(thread_negotiating, gmail)
 
         mock_compare.assert_not_called()
@@ -483,8 +552,10 @@ class TestProcessThreadEdgeCases:
 class TestProcessNegotiations:
     def test_processes_ready_threads(self, thread_awaiting_reply):
         match_result = MatchResult(
-            is_match=True, confidence=0.9,
-            reasoning="Match", key_differences=[],
+            is_match=True,
+            confidence=0.9,
+            reasoning="Match",
+            key_differences=[],
         )
         neg_result = NegotiationResult(
             action=NegotiationAction.REPLY,
@@ -493,21 +564,34 @@ class TestProcessNegotiations:
         )
         gmail = _mock_gmail()
 
-        with patch("app.agent.stage_five_negotiation.GmailService", return_value=gmail), \
-             patch("app.agent.stage_five_negotiation.compare_products", return_value=match_result), \
-             patch("app.agent.stage_five_negotiation.negotiate", return_value=neg_result):
+        with (
+            patch("app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail),
+            patch(
+                "app.pipeline.stages.s5_negotiation.compare_products",
+                return_value=match_result,
+            ),
+            patch(
+                "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
+            ),
+        ):
             counts = process_negotiations()
 
         assert counts.get("replied", 0) >= 1
 
     def test_empty_when_no_threads(self):
-        with patch("app.agent.stage_five_negotiation.GmailService"), \
-             patch("app.agent.stage_five_negotiation._get_ready_threads", return_value=[]):
+        with (
+            patch("app.pipeline.stages.s5_negotiation.GmailService"),
+            patch(
+                "app.pipeline.stages.s5_negotiation._get_ready_threads", return_value=[]
+            ),
+        ):
             counts = process_negotiations()
 
         assert counts == {}
 
-    def test_error_in_one_thread_doesnt_stop_others(self, thread_awaiting_reply, thread_negotiating):
+    def test_error_in_one_thread_doesnt_stop_others(
+        self, thread_awaiting_reply, thread_negotiating
+    ):
         neg_result = NegotiationResult(
             action=NegotiationAction.REPLY,
             reply_text="Lower.",
@@ -524,8 +608,13 @@ class TestProcessNegotiations:
                 raise RuntimeError("Simulated failure")
             return "replied"
 
-        with patch("app.agent.stage_five_negotiation.GmailService", return_value=gmail), \
-             patch("app.agent.stage_five_negotiation._process_thread", side_effect=failing_then_ok):
+        with (
+            patch("app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail),
+            patch(
+                "app.pipeline.stages.s5_negotiation._process_thread",
+                side_effect=failing_then_ok,
+            ),
+        ):
             counts = process_negotiations()
 
         assert counts.get("error", 0) == 1

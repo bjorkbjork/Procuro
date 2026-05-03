@@ -1,6 +1,6 @@
 import logging
 
-from app.agent.stage_one_spec_extraction import extract_specs
+from app.pipeline.stages.s1_spec_extraction import extract_specs
 from app.db.database import SessionLocal
 from app.db.models.source_product import SourceProduct
 from app.services.sheets import SheetsService

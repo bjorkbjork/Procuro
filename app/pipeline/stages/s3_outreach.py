@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import stamina
 
-from app.agent.inquiry_agent import InquiryStatus, send_inquiry_via_agent
+from app.pipeline.agents.inquiry_agent import InquiryStatus, send_inquiry_via_agent
 from app.base.config import settings
 from app.db.database import SessionLocal
 from app.db.models.message import Message

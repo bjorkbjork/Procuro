@@ -19,13 +19,13 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart
 from pydantic_ai.models.bedrock import BedrockConverseModel
 from pydantic_ai.providers.bedrock import BedrockProvider
 
-from app.base.config import model_settings, settings
+from app.base.config import PROJECT_ROOT, model_settings, settings
 
 log = logging.getLogger(__name__)
 
 _provider = None
 
-EVICTION_DIR = Path(__file__).resolve().parents[2] / "snapshots"
+EVICTION_DIR = PROJECT_ROOT / "snapshots"
 CHARS_PER_TOKEN = 4
 EVICTION_MIN_TOKENS = 1_000
 EVICTION_BUDGET_RATIO = 0.60

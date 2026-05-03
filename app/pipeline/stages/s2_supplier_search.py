@@ -15,8 +15,8 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from app.agent.match_agent import MatchResult, compare_products
-from app.agent.query_agent import generate_search_queries
+from app.pipeline.agents.match_agent import MatchResult, compare_products
+from app.pipeline.agents.query_agent import generate_search_queries
 from app.base.config import settings
 from app.db.database import SessionLocal
 from app.db.models.source_product import SourceProduct
