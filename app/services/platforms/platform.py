@@ -11,6 +11,7 @@ from app.db.models.enums import Platform as PlatformEnum
 class SupplierPlatform(Protocol):
     platform: PlatformEnum
     spec_selector: str
+    inquiry_agent_prompt: str
 
     def search(self, query: str, page_size: int = 20) -> list[dict]: ...
 
