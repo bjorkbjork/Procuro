@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import requests
+import stamina
 from bs4 import BeautifulSoup
 from playwright.sync_api import Error as PlaywrightError, Page
 
@@ -157,7 +158,6 @@ def _get_inquiry_frame(page: Page, timeout: int = 15_000) -> "Frame":
 _JS_FILL_AND_SUBMIT = (Path(__file__).parent / "fill_and_submit.js").read_text()
 
 
-PAGE_LOAD_RETRIES = 2
 PAGE_LOAD_TIMEOUT = 300_000
 SUBMIT_CONFIRM_TIMEOUT = 15
 
@@ -179,23 +179,13 @@ def _wait_for_submit_confirmation(page: Page, frame_url_pattern: re.Pattern, tim
     return False
 
 
+@stamina.retry(on=PlaywrightError, attempts=3, timeout=300)
 def _load_product_page(page: Page, product_url: str) -> None:
     """Navigate to product page and wait for actionable content, with retries."""
-    for attempt in range(1 + PAGE_LOAD_RETRIES):
-        try:
-            page.goto(product_url, timeout=PAGE_LOAD_TIMEOUT)
-            page.wait_for_selector(
-                f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=PAGE_LOAD_TIMEOUT,
-            )
-            return
-        except PlaywrightError:
-            if attempt < PAGE_LOAD_RETRIES:
-                log.warning(
-                    "Page load failed for %s, retrying (%d/%d)",
-                    product_url, attempt + 1, PAGE_LOAD_RETRIES,
-                )
-                continue
-            raise
+    page.goto(product_url, timeout=PAGE_LOAD_TIMEOUT)
+    page.wait_for_selector(
+        f"{INQUIRY_BUTTON}, {WHOLESALE_INDICATOR}", timeout=PAGE_LOAD_TIMEOUT,
+    )
 
 
 def send_product_inquiry(page: Page, product_url: str, message: str) -> bool:

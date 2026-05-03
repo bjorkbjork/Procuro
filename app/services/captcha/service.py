@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import stamina
 from playwright.sync_api import Page
 
 from app.base.config import settings
@@ -65,9 +66,12 @@ def _detect_captcha(page: Page) -> bool:
 
 SLIDER_HANDLE = "#nc_1_n1z"
 SLIDER_TRACK = ".nc_scale"
-CAPTCHA_PAGE_RETRIES = 3
 
 _JS_SLIDER_DRAG = (Path(__file__).parent / "slider_drag.js").read_text()
+
+
+class SliderSolveError(Exception):
+    """Raised when a slider captcha solve attempt fails."""
 
 
 def _try_slider_solve(page: Page) -> bool:
@@ -169,6 +173,28 @@ def _wait_for_manual_solve(page: Page) -> bool:
     return False
 
 
+@stamina.retry(on=SliderSolveError, attempts=4, timeout=120)
+def _solve_slider_with_retry(page: Page) -> bool:
+    """Try the slider solve, reloading the page between attempts.
+
+    Returns True if captcha was cleared (either by solve or by reload).
+    Raises SliderSolveError to trigger stamina retry.
+    """
+    if page.locator(SLIDER_HANDLE).count() == 0 or page.locator(SLIDER_TRACK).count() == 0:
+        return False
+
+    log.info("Slider captcha detected — attempting drag solve")
+    if _try_slider_solve(page):
+        return True
+
+    log.warning("Slider solve failed — reloading page")
+    page.reload(wait_until="networkidle")
+    if not _detect_captcha(page):
+        return True
+
+    raise SliderSolveError("Slider solve failed after reload, captcha still present")
+
+
 def handle_captcha(
     page: Page,
     session_url: str,
@@ -182,20 +208,11 @@ def handle_captcha(
     if not _detect_captcha(page):
         return True
 
-    for retry in range(1 + CAPTCHA_PAGE_RETRIES):
-        if page.locator(SLIDER_HANDLE).count() > 0 and page.locator(SLIDER_TRACK).count() > 0:
-            log.info("Slider captcha detected — attempting drag solve")
-            if _try_slider_solve(page):
-                return True
-            log.warning(
-                "Slider solve failed — reloading page (attempt %d/%d)",
-                retry + 1, 1 + CAPTCHA_PAGE_RETRIES,
-            )
-            page.reload(wait_until="networkidle")
-            if not _detect_captcha(page):
-                return True
-            continue
-        break
+    try:
+        if _solve_slider_with_retry(page):
+            return True
+    except SliderSolveError:
+        log.warning("Slider solve exhausted all retries")
 
     log.info("Captcha detected — waiting for Browserbase auto-solve")
     state = CaptchaSolveState(detected=True)
