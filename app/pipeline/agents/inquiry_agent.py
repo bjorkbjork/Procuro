@@ -19,12 +19,12 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_ai import Tool
 
-from app.base.config import browserbase_settings, model_settings
+from app.base.config import PROJECT_ROOT, browserbase_settings, model_settings
 from app.base.llm import Agent, get_model
 
 log = logging.getLogger(__name__)
 
-BROWSE_BIN = str(Path(__file__).resolve().parents[2] / "node_modules" / ".bin" / "browse")
+BROWSE_BIN = str(PROJECT_ROOT / "node_modules" / ".bin" / "browse")
 
 SYSTEM_PROMPT = """\
 You are a browser automation recovery agent. A coded automation flow tried to \

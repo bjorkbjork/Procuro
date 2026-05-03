@@ -1,10 +1,18 @@
 """Tests for Stage 4 inbox triage. Mocks Gmail and LLM — tests the
 three-tier filter logic, ignore list management, and state transitions."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.agent.stage_four_inbox_triage import (
+import pytest
+
+from app.db.database import SessionLocal
+from app.db.models.keyvalue import KeyValue
+from app.db.models.message import Message
+from app.db.models.source_product import SourceProduct
+from app.db.models.supplier import Supplier
+from app.db.models.supplier_product import SupplierProduct
+from app.db.models.supplier_thread import SupplierThread
+from app.pipeline.stages.s4_inbox_triage import (
     DEFAULT_IGNORE_EMAILS,
     IGNORE_EMAILS_KEY,
     TriageResult,
@@ -17,13 +25,6 @@ from app.agent.stage_four_inbox_triage import (
     _is_platform_notification,
     triage_inbox,
 )
-from app.db.database import SessionLocal
-from app.db.models.keyvalue import KeyValue
-from app.db.models.message import Message
-from app.db.models.source_product import SourceProduct
-from app.db.models.supplier import Supplier
-from app.db.models.supplier_product import SupplierProduct
-from app.db.models.supplier_thread import SupplierThread
 
 
 @pytest.fixture(autouse=True)
@@ -38,9 +39,12 @@ def clean_ignore_list():
         session.commit()
 
 
-def _make_gmail_message(from_addr: str, subject: str, body: str, msg_id: str = "msg1", from_name: str = "") -> dict:
+def _make_gmail_message(
+    from_addr: str, subject: str, body: str, msg_id: str = "msg1", from_name: str = ""
+) -> dict:
     from_header = f"{from_name} <{from_addr}>" if from_name else from_addr
     import base64
+
     encoded_body = base64.urlsafe_b64encode(body.encode()).decode()
     return {
         "id": msg_id,
@@ -58,6 +62,7 @@ def _make_gmail_message(from_addr: str, subject: str, body: str, msg_id: str = "
 # ---------------------------------------------------------------------------
 # Unit tests: email parsing helpers
 # ---------------------------------------------------------------------------
+
 
 class TestExtractSender:
     def test_simple_address(self):
@@ -116,6 +121,7 @@ class TestIsPlatformNotification:
 # Unit tests: ignore list management
 # ---------------------------------------------------------------------------
 
+
 class TestIgnoreList:
     def test_seeds_defaults(self):
         emails = _get_ignore_emails()
@@ -152,6 +158,7 @@ class TestIgnoreList:
 # Integration-style tests: triage pipeline (mocked Gmail + LLM)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def supplier_thread():
     with SessionLocal() as session:
@@ -159,7 +166,7 @@ def supplier_thread():
             url="https://www.kogan.com/au/buy/test-triage/",
             slug="test-triage",
             title="Test Triage Product",
-            specs={"Display": {"Size": "75\""}},
+            specs={"Display": {"Size": '75"'}},
         )
         session.add(source)
         session.flush()
@@ -217,7 +224,9 @@ class TestTriageInbox:
         msg = _make_gmail_message("no-reply@google.com", "Security alert", "body")
         mock_gmail = self._mock_gmail([("t1", msg)])
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService", return_value=mock_gmail
+        ):
             counts = triage_inbox()
 
         assert counts["archived_noise"] == 1
@@ -225,12 +234,16 @@ class TestTriageInbox:
 
     def test_archives_platform_notification(self):
         msg = _make_gmail_message(
-            "no-reply@alibaba.com", "You have a new message from supplier",
-            "Check your messages", from_name="No-Reply",
+            "no-reply@alibaba.com",
+            "You have a new message from supplier",
+            "Check your messages",
+            from_name="No-Reply",
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService", return_value=mock_gmail
+        ):
             counts = triage_inbox()
 
         assert counts["archived_notification"] == 1
@@ -244,27 +257,38 @@ class TestTriageInbox:
             session.commit()
 
         msg = _make_gmail_message(
-            "sales@factory.cn", "Re: Follow up",
-            "Updated pricing: $140 FOB", msg_id="gmsg_known",
+            "sales@factory.cn",
+            "Re: Follow up",
+            "Updated pricing: $140 FOB",
+            msg_id="gmsg_known",
         )
         mock_gmail = self._mock_gmail([("known_t1", msg)])
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService", return_value=mock_gmail
+        ):
             counts = triage_inbox()
 
         assert counts["supplier_reply"] == 1
         mock_gmail.archive_thread.assert_called_once_with("known_t1")
 
         with SessionLocal() as session:
-            msgs = session.query(Message).filter_by(
-                thread_id=supplier_thread.id, gmail_message_id="gmsg_known",
-            ).all()
+            msgs = (
+                session.query(Message)
+                .filter_by(
+                    thread_id=supplier_thread.id,
+                    gmail_message_id="gmsg_known",
+                )
+                .all()
+            )
             assert len(msgs) == 1
 
     def test_llm_triage_supplier_reply(self, supplier_thread):
         msg = _make_gmail_message(
-            "sales@factory.cn", "Re: Inquiry about TV",
-            "We can offer $150 FOB per unit, MOQ 500", msg_id="gmsg_100",
+            "sales@factory.cn",
+            "Re: Inquiry about TV",
+            "We can offer $150 FOB per unit, MOQ 500",
+            msg_id="gmsg_100",
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
 
@@ -277,8 +301,13 @@ class TestTriageInbox:
         mock_run = MagicMock()
         mock_run.output = triage_result
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail), \
-             patch("app.agent.stage_four_inbox_triage.Agent") as MockAgent:
+        with (
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch("app.pipeline.stages.s4_inbox_triage.Agent") as MockAgent,
+        ):
             MockAgent.return_value.run_sync.return_value = mock_run
             counts = triage_inbox()
 
@@ -290,25 +319,37 @@ class TestTriageInbox:
             thread = session.get(SupplierThread, supplier_thread.id)
             assert thread.state == "AWAITING_REPLY"
             assert thread.gmail_thread_id == "t1"
-            msgs = session.query(Message).filter_by(thread_id=supplier_thread.id, direction="inbound").all()
+            msgs = (
+                session.query(Message)
+                .filter_by(thread_id=supplier_thread.id, direction="inbound")
+                .all()
+            )
             assert len(msgs) == 1
             assert msgs[0].gmail_message_id == "gmsg_100"
 
     def test_llm_triage_archive(self):
         msg = _make_gmail_message(
-            "marketing@randomco.com", "Special offer!",
+            "marketing@randomco.com",
+            "Special offer!",
             "Buy our products at a discount",
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
 
         triage_result = TriageResult(
-            action="archive", summary="Marketing spam", reason="Unsolicited marketing",
+            action="archive",
+            summary="Marketing spam",
+            reason="Unsolicited marketing",
         )
         mock_run = MagicMock()
         mock_run.output = triage_result
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail), \
-             patch("app.agent.stage_four_inbox_triage.Agent") as MockAgent:
+        with (
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch("app.pipeline.stages.s4_inbox_triage.Agent") as MockAgent,
+        ):
             MockAgent.return_value.run_sync.return_value = mock_run
             counts = triage_inbox()
 
@@ -317,19 +358,26 @@ class TestTriageInbox:
 
     def test_llm_triage_flag_human(self):
         msg = _make_gmail_message(
-            "legal@supplier.com", "Business registration required",
+            "legal@supplier.com",
+            "Business registration required",
             "Please provide your import licence",
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
 
         triage_result = TriageResult(
-            action="flag_human", reason="Legal/compliance request",
+            action="flag_human",
+            reason="Legal/compliance request",
         )
         mock_run = MagicMock()
         mock_run.output = triage_result
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail), \
-             patch("app.agent.stage_four_inbox_triage.Agent") as MockAgent:
+        with (
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch("app.pipeline.stages.s4_inbox_triage.Agent") as MockAgent,
+        ):
             MockAgent.return_value.run_sync.return_value = mock_run
             counts = triage_inbox()
 
@@ -338,43 +386,62 @@ class TestTriageInbox:
 
     def test_does_not_duplicate_messages(self, supplier_thread):
         msg = _make_gmail_message(
-            "sales@factory.cn", "Re: Inquiry", "offer", msg_id="gmsg_dup",
+            "sales@factory.cn",
+            "Re: Inquiry",
+            "offer",
+            msg_id="gmsg_dup",
         )
         # Pre-insert the message
         with SessionLocal() as session:
-            session.add(Message(
-                thread_id=supplier_thread.id,
-                gmail_message_id="gmsg_dup",
-                direction="inbound",
-                subject="Re: Inquiry",
-                body="offer",
-            ))
+            session.add(
+                Message(
+                    thread_id=supplier_thread.id,
+                    gmail_message_id="gmsg_dup",
+                    direction="inbound",
+                    subject="Re: Inquiry",
+                    body="offer",
+                )
+            )
             session.commit()
 
         mock_gmail = self._mock_gmail([("t1", msg)])
         triage_result = TriageResult(
-            action="reply_supplier", thread_id=supplier_thread.id,
-            summary="Duplicate", reason="Supplier reply",
+            action="reply_supplier",
+            thread_id=supplier_thread.id,
+            summary="Duplicate",
+            reason="Supplier reply",
         )
         mock_run = MagicMock()
         mock_run.output = triage_result
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail), \
-             patch("app.agent.stage_four_inbox_triage.Agent") as MockAgent:
+        with (
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch("app.pipeline.stages.s4_inbox_triage.Agent") as MockAgent,
+        ):
             MockAgent.return_value.run_sync.return_value = mock_run
             triage_inbox()
 
         with SessionLocal() as session:
-            msgs = session.query(Message).filter_by(
-                thread_id=supplier_thread.id, gmail_message_id="gmsg_dup",
-            ).all()
+            msgs = (
+                session.query(Message)
+                .filter_by(
+                    thread_id=supplier_thread.id,
+                    gmail_message_id="gmsg_dup",
+                )
+                .all()
+            )
             assert len(msgs) == 1
 
     def test_empty_inbox(self):
         mock_gmail = MagicMock()
         mock_gmail.list_unread_threads.return_value = []
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService", return_value=mock_gmail
+        ):
             counts = triage_inbox()
 
         assert all(v == 0 for v in counts.values())
@@ -384,7 +451,9 @@ class TestTriageInbox:
         mock_gmail.list_unread_threads.return_value = [{"id": "t1"}]
         mock_gmail.get_thread.side_effect = RuntimeError("API error")
 
-        with patch("app.agent.stage_four_inbox_triage.GmailService", return_value=mock_gmail):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService", return_value=mock_gmail
+        ):
             counts = triage_inbox()
 
         assert counts["errors"] == 1

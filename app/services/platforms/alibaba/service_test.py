@@ -1,17 +1,16 @@
 """Tests for Alibaba service — fixture-based parsing + live search."""
 
-from pathlib import Path
-
 import pytest
 from bs4 import BeautifulSoup
 
+from app.base.config import PROJECT_ROOT
 from app.services.platforms.alibaba.service import (
     parse_product_specs,
     parse_product_title,
     search_suppliers,
 )
 
-FIXTURES_DIR = Path(__file__).resolve().parents[4] / "html_test_fixtures"
+FIXTURES_DIR = PROJECT_ROOT / "html_test_fixtures"
 ALIBABA_FIXTURE = next(FIXTURES_DIR.glob("*Advertising Players*"))
 
 

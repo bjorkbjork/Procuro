@@ -1,5 +1,9 @@
+from pathlib import Path
+
 import pydantic
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):

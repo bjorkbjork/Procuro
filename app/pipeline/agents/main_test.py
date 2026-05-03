@@ -3,16 +3,20 @@ Tests for the Stage 1 integration: poll input sheet → extract specs → update
 All external calls (Sheets API, Browserbase) are monkeypatched.
 """
 
-import pytest
 from unittest.mock import MagicMock, call
-from pathlib import Path
 
-from app.agent.main import process_input_sheet
+import pytest
+
+from app.base.config import PROJECT_ROOT
+from app.pipeline.agents.main import process_input_sheet
 from app.db.database import SessionLocal
 from app.db.models.source_product import SourceProduct
 
-FIXTURES_DIR = Path(__file__).resolve().parents[2] / "html_test_fixtures"
-FIXTURE_PATH = FIXTURES_DIR / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+FIXTURES_DIR = PROJECT_ROOT / "html_test_fixtures"
+FIXTURE_PATH = (
+    FIXTURES_DIR
+    / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
+)
 FAKE_URL_1 = "https://www.kogan.com/au/buy/test-main-1/"
 FAKE_URL_2 = "https://www.kogan.com/au/buy/test-main-2/"
 
@@ -30,14 +34,17 @@ def cleanup():
 @pytest.fixture
 def mock_sheets(monkeypatch):
     mock = MagicMock()
-    monkeypatch.setattr("app.agent.main.SheetsService", lambda: mock)
+    monkeypatch.setattr("app.pipeline.agents.main.SheetsService", lambda: mock)
     return mock
 
 
 @pytest.fixture(autouse=True)
 def mock_fetch(monkeypatch):
     html = FIXTURE_PATH.read_text()
-    monkeypatch.setattr("app.agent.stage_one_spec_extraction.fetch_page_html", lambda url, proxy_country=None: html)
+    monkeypatch.setattr(
+        "app.pipeline.stages.s1_spec_extraction.fetch_page_html",
+        lambda url, proxy_country=None: html,
+    )
 
 
 class TestProcessInputSheet:
@@ -71,7 +78,11 @@ class TestProcessInputSheet:
 
     def test_marks_existing_product_as_done(self, mock_sheets):
         with SessionLocal() as session:
-            session.add(SourceProduct(url=FAKE_URL_1, slug="test-main-1", title="Test", specs={}))
+            session.add(
+                SourceProduct(
+                    url=FAKE_URL_1, slug="test-main-1", title="Test", specs={}
+                )
+            )
             session.commit()
 
         mock_sheets.read_input_rows.return_value = [
@@ -82,8 +93,10 @@ class TestProcessInputSheet:
 
     def test_marks_error_on_failure(self, mock_sheets, monkeypatch):
         monkeypatch.setattr(
-            "app.agent.stage_one_spec_extraction.fetch_page_html",
-            lambda url, proxy_country=None: (_ for _ in ()).throw(RuntimeError("captcha")),
+            "app.pipeline.stages.s1_spec_extraction.fetch_page_html",
+            lambda url, proxy_country=None: (_ for _ in ()).throw(
+                RuntimeError("captcha")
+            ),
         )
         mock_sheets.read_input_rows.return_value = [
             {"url": FAKE_URL_1, "status": ""},

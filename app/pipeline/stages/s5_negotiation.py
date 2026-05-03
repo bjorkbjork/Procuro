@@ -16,18 +16,18 @@ import logging
 import random
 from datetime import datetime, timedelta, timezone
 
-from app.agent.match_agent import compare_products
-from app.agent.negotiation_agent import (
+from app.pipeline.agents.match_agent import compare_products
+from app.pipeline.agents.negotiation_agent import (
     NegotiationAction,
     build_message_history,
     negotiate,
 )
-from app.agent.stage_four_inbox_triage import _extract_sender
 from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.supplier_thread import SupplierThread
 from app.services.gmail import GmailService
+from app.pipeline.stages.s4_inbox_triage import _extract_sender
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +95,10 @@ def _run_spec_check(thread_id: int) -> bool:
 
         log.info(
             "Spec check for thread %d: match=%s confidence=%.2f — %s",
-            thread_id, result.is_match, result.confidence, result.reasoning[:100],
+            thread_id,
+            result.is_match,
+            result.confidence,
+            result.reasoning[:100],
         )
 
         if result.is_match:
@@ -107,31 +110,39 @@ def _run_spec_check(thread_id: int) -> bool:
         return result.is_match
 
 
-def _record_quote(thread_id: int, price_usd: float | None, moq: int | None, lead_time: str | None) -> None:
+def _record_quote(
+    thread_id: int, price_usd: float | None, moq: int | None, lead_time: str | None
+) -> None:
     if price_usd is None:
         return
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         round_number = thread.negotiation_rounds + 1
-        session.add(Quote(
-            thread_id=thread_id,
-            round_number=round_number,
-            price_usd=price_usd,
-            moq=moq,
-            lead_time=lead_time,
-        ))
+        session.add(
+            Quote(
+                thread_id=thread_id,
+                round_number=round_number,
+                price_usd=price_usd,
+                moq=moq,
+                lead_time=lead_time,
+            )
+        )
         session.commit()
 
 
-def _record_outbound(thread_id: int, gmail_message_id: str, subject: str, body: str) -> None:
+def _record_outbound(
+    thread_id: int, gmail_message_id: str, subject: str, body: str
+) -> None:
     with SessionLocal() as session:
-        session.add(Message(
-            thread_id=thread_id,
-            gmail_message_id=gmail_message_id,
-            direction="outbound",
-            subject=subject,
-            body=body,
-        ))
+        session.add(
+            Message(
+                thread_id=thread_id,
+                gmail_message_id=gmail_message_id,
+                direction="outbound",
+                subject=subject,
+                body=body,
+            )
+        )
         session.commit()
 
 
@@ -168,14 +179,17 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
             supplier_email = _get_supplier_email(gmail, gmail_thread_id)
             if supplier_email:
                 reply = gmail.reply_to_thread(
-                    gmail_thread_id, supplier_email,
+                    gmail_thread_id,
+                    supplier_email,
                     "Re: Product Inquiry",
                     "Thank you for your response. Unfortunately, the specifications "
                     "do not match our requirements. We appreciate your time.",
                 )
                 _record_outbound(
-                    thread_id, reply.get("id", ""),
-                    "Re: Product Inquiry", "Spec check decline",
+                    thread_id,
+                    reply.get("id", ""),
+                    "Re: Product Inquiry",
+                    "Spec check decline",
                 )
             with SessionLocal() as session:
                 thread = session.get(SupplierThread, thread_id)
@@ -201,7 +215,9 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
 
     log.info(
         "Thread %d negotiation: action=%s reasoning=%s",
-        thread_id, result.action, result.reasoning[:100],
+        thread_id,
+        result.action,
+        result.reasoning[:100],
     )
 
     # Record any extracted pricing
@@ -213,12 +229,16 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
     if result.action == NegotiationAction.REPLY:
         if supplier_email and result.reply_text:
             reply = gmail.reply_to_thread(
-                gmail_thread_id, supplier_email,
-                "Re: Product Inquiry", result.reply_text,
+                gmail_thread_id,
+                supplier_email,
+                "Re: Product Inquiry",
+                result.reply_text,
             )
             _record_outbound(
-                thread_id, reply.get("id", ""),
-                "Re: Product Inquiry", result.reply_text,
+                thread_id,
+                reply.get("id", ""),
+                "Re: Product Inquiry",
+                result.reply_text,
             )
 
         with SessionLocal() as session:
@@ -226,7 +246,8 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
             thread.state = "NEGOTIATING"
             thread.negotiation_rounds = negotiation_rounds + 1
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
-                REPLY_DELAY_MIN_HOURS, REPLY_DELAY_MAX_HOURS,
+                REPLY_DELAY_MIN_HOURS,
+                REPLY_DELAY_MAX_HOURS,
             )
             session.commit()
         return "replied"
@@ -235,7 +256,8 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
         with SessionLocal() as session:
             thread = session.get(SupplierThread, thread_id)
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
-                SILENCE_DELAY_MIN_HOURS, SILENCE_DELAY_MAX_HOURS,
+                SILENCE_DELAY_MIN_HOURS,
+                SILENCE_DELAY_MAX_HOURS,
             )
             session.commit()
         return "silence"
@@ -243,12 +265,16 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
     elif result.action == NegotiationAction.CLOSE:
         if supplier_email and result.reply_text:
             reply = gmail.reply_to_thread(
-                gmail_thread_id, supplier_email,
-                "Re: Product Inquiry", result.reply_text,
+                gmail_thread_id,
+                supplier_email,
+                "Re: Product Inquiry",
+                result.reply_text,
             )
             _record_outbound(
-                thread_id, reply.get("id", ""),
-                "Re: Product Inquiry", result.reply_text,
+                thread_id,
+                reply.get("id", ""),
+                "Re: Product Inquiry",
+                result.reply_text,
             )
 
         with SessionLocal() as session:

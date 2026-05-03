@@ -1,12 +1,11 @@
 """Tests for Kogan product page parsing. Uses saved HTML fixture."""
 
-from pathlib import Path
-
 import pytest
 
+from app.base.config import PROJECT_ROOT
 from app.services.sources.kogan.service import parse_specs, parse_title, slug_from_url
 
-FIXTURES_DIR = Path(__file__).resolve().parents[4] / "html_test_fixtures"
+FIXTURES_DIR = PROJECT_ROOT / "html_test_fixtures"
 FIXTURE_PATH = FIXTURES_DIR / "Buy Kogan 75_ QLED 4K Smart AI Google TV - Q97T Online _ Kogan.com.html"
 
 

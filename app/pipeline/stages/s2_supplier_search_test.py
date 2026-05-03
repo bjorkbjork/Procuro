@@ -3,10 +3,10 @@ Query agent is monkeypatched to skip the LLM call — everything else is real.""
 
 import pytest
 
-from app.agent.stage_two_supplier_search import search_and_extract
 from app.db.database import SessionLocal
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier_product import SupplierProduct
+from app.pipeline.stages.s2_supplier_search import search_and_extract
 
 SOURCE_URL = "https://www.kogan.com/au/buy/test-stage-two/"
 
@@ -14,7 +14,7 @@ SOURCE_URL = "https://www.kogan.com/au/buy/test-stage-two/"
 @pytest.mark.integration
 def test_search_and_extract(monkeypatch):
     monkeypatch.setattr(
-        "app.agent.stage_two_supplier_search.generate_search_queries",
+        "app.pipeline.stages.s2_supplier_search.generate_search_queries",
         lambda title, specs: ["75 inch QLED 4K television"],
     )
 
@@ -23,7 +23,7 @@ def test_search_and_extract(monkeypatch):
             url=SOURCE_URL,
             slug="test-stage-two",
             title="75 inch QLED 4K Smart TV",
-            specs={"Display": {"Screen Type": "QLED", "Screen Size": "75\""}},
+            specs={"Display": {"Screen Type": "QLED", "Screen Size": '75"'}},
         )
         session.add(source)
         session.commit()
@@ -40,9 +40,13 @@ def test_search_and_extract(monkeypatch):
             print(f"  Spec groups: {list(sp.specs.keys()) if sp.specs else 'none'}")
 
         with SessionLocal() as session:
-            persisted = session.query(SupplierProduct).filter_by(
-                source_product_id=source_id,
-            ).all()
+            persisted = (
+                session.query(SupplierProduct)
+                .filter_by(
+                    source_product_id=source_id,
+                )
+                .all()
+            )
             assert len(persisted) == len(results)
             for sp in persisted:
                 assert sp.specs, f"No specs for {sp.product_url}"
@@ -58,4 +62,5 @@ def test_search_and_extract(monkeypatch):
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v", "-s"])

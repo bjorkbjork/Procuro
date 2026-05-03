@@ -24,7 +24,7 @@ log = logging.getLogger("pipeline")
 
 
 def cmd_stage1(args):
-    from app.agent.stage_one_spec_extraction import extract_specs
+    from app.pipeline.stages.s1_spec_extraction import extract_specs
 
     product = extract_specs(args.url)
     log.info("Stage 1 complete.")
@@ -37,7 +37,7 @@ def cmd_stage1(args):
 
 
 def cmd_stage2(args):
-    from app.agent.stage_two_supplier_search import run_supplier_search
+    from app.pipeline.stages.s2_supplier_search import run_supplier_search
 
     threads = run_supplier_search(args.source_product_id)
     log.info("Stage 2 complete. %d supplier threads created.", len(threads))
@@ -53,7 +53,7 @@ def cmd_stage2(args):
 
 
 def cmd_stage2a(args):
-    from app.agent.stage_two_supplier_search import search_and_extract
+    from app.pipeline.stages.s2_supplier_search import search_and_extract
 
     queries = args.query if args.query else None
     products = search_and_extract(args.source_product_id, queries=queries)
@@ -67,7 +67,7 @@ def cmd_stage2a(args):
 
 
 def cmd_stage2b(args):
-    from app.agent.stage_two_supplier_search import match_candidates
+    from app.pipeline.stages.s2_supplier_search import match_candidates
 
     threads = match_candidates(args.source_product_id, match_all=args.match_all)
     log.info("Stage 2b complete. %d threads matched.", len(threads))
@@ -81,28 +81,28 @@ def cmd_stage2b(args):
 
 
 def cmd_stage3(args):
-    from app.agent.stage_three_outreach import send_outreach
+    from app.pipeline.stages.s3_outreach import send_outreach
 
     count = send_outreach(agent_only=args.agent)
     log.info("Stage 3 complete. %d inquiries sent.", count)
 
 
 def cmd_stage4(args):
-    from app.agent.stage_four_inbox_triage import triage_inbox
+    from app.pipeline.stages.s4_inbox_triage import triage_inbox
 
     counts = triage_inbox()
     log.info("Stage 4 complete. %s", counts)
 
 
 def cmd_stage5(args):
-    from app.agent.stage_five_negotiation import process_negotiations
+    from app.pipeline.stages.s5_negotiation import process_negotiations
 
     counts = process_negotiations()
     log.info("Stage 5 complete. %s", counts)
 
 
 def cmd_stage6(args):
-    from app.agent.stage_six_sheet_update import update_sheet
+    from app.pipeline.stages.s6_sheet_update import update_sheet
 
     count = update_sheet()
     log.info("Stage 6 complete. %d rows upserted.", count)
@@ -180,7 +180,11 @@ def main():
     s2b.set_defaults(func=cmd_stage2b)
 
     s3 = sub.add_parser("stage3", help="Send outreach for all NEW threads")
-    s3.add_argument("--agent", action="store_true", help="Skip deterministic flow, go direct to LLM agent")
+    s3.add_argument(
+        "--agent",
+        action="store_true",
+        help="Skip deterministic flow, go direct to LLM agent",
+    )
     s3.set_defaults(func=cmd_stage3)
 
     s4 = sub.add_parser("stage4", help="Triage Gmail inbox")

@@ -1,11 +1,11 @@
 """Tests for Stage 6 sheet update. Mocks SheetsService — tests row building
 logic, ordering, and handling of threads with/without quotes."""
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from app.agent.stage_six_sheet_update import _build_row, update_sheet
+import pytest
+
 from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.quote import Quote
@@ -13,7 +13,7 @@ from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-
+from app.pipeline.stages.s6_sheet_update import _build_row, update_sheet
 
 TEST_URL = "https://www.kogan.com/au/buy/test-sheet-update/"
 
@@ -23,8 +23,10 @@ def thread_with_quote():
     """Create a full thread with an outbound message and a quote."""
     with SessionLocal() as session:
         source = SourceProduct(
-            url=TEST_URL, slug="test-sheet-update", title="Test Sheet Product",
-            specs={"Display": {"Size": "75\""}},
+            url=TEST_URL,
+            slug="test-sheet-update",
+            title="Test Sheet Product",
+            specs={"Display": {"Size": '75"'}},
         )
         session.add(source)
         session.flush()
@@ -92,7 +94,8 @@ def thread_without_quote():
     with SessionLocal() as session:
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-no-quote/",
-            slug="test-no-quote", title="No Quote Product",
+            slug="test-no-quote",
+            title="No Quote Product",
             specs={},
         )
         session.add(source)
@@ -175,7 +178,9 @@ class TestUpdateSheet:
     def test_upserts_non_new_threads(self, thread_with_quote):
         mock_sheets = MagicMock()
 
-        with patch("app.agent.stage_six_sheet_update.SheetsService", return_value=mock_sheets):
+        with patch(
+            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+        ):
             count = update_sheet()
 
         assert count >= 1
@@ -191,18 +196,22 @@ class TestUpdateSheet:
         with SessionLocal() as session:
             source = SourceProduct(
                 url="https://www.kogan.com/au/buy/test-new-skip/",
-                slug="test-new-skip", title="Skip Me", specs={},
+                slug="test-new-skip",
+                title="Skip Me",
+                specs={},
             )
             session.add(source)
             session.flush()
             supplier = Supplier(
-                name="Skip Supplier", platform="alibaba",
+                name="Skip Supplier",
+                platform="alibaba",
                 profile_url="https://skip.alibaba.com",
             )
             session.add(supplier)
             session.flush()
             sup_product = SupplierProduct(
-                source_product_id=source.id, supplier_id=supplier.id,
+                source_product_id=source.id,
+                supplier_id=supplier.id,
                 platform="alibaba",
                 product_url="https://www.alibaba.com/product-detail/skip_000.html",
                 title="Skip TV",
@@ -223,7 +232,9 @@ class TestUpdateSheet:
             src_id = source.id
 
         mock_sheets = MagicMock()
-        with patch("app.agent.stage_six_sheet_update.SheetsService", return_value=mock_sheets):
+        with patch(
+            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+        ):
             update_sheet()
 
         rows_written = [
@@ -243,14 +254,18 @@ class TestUpdateSheet:
         mock_sheets = MagicMock()
         mock_sheets.upsert_output_row.side_effect = RuntimeError("Sheets API error")
 
-        with patch("app.agent.stage_six_sheet_update.SheetsService", return_value=mock_sheets):
+        with patch(
+            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+        ):
             count = update_sheet()
 
         assert count == 0
 
     def test_empty_db(self):
         mock_sheets = MagicMock()
-        with patch("app.agent.stage_six_sheet_update.SheetsService", return_value=mock_sheets):
+        with patch(
+            "app.pipeline.stages.s6_sheet_update.SheetsService", return_value=mock_sheets
+        ):
             count = update_sheet()
 
         # May be 0 or may pick up other test fixtures, but shouldn't crash

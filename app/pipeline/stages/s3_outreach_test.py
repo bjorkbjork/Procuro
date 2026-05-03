@@ -1,24 +1,20 @@
 """Tests for Stage 3 outreach. Mocks browser and platform — tests the
 orchestration logic (thread selection, message building, state transitions)."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.agent.stage_three_outreach import (
-    _build_message,
-    _format_spec_block,
-    send_outreach,
-)
+import pytest
+
 from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
-
+from app.pipeline.stages.s3_outreach import _build_message, _format_spec_block, send_outreach
 
 TEST_SPECS = {
-    "Display": {"Screen Size": "75\"", "Screen Type": "QLED"},
+    "Display": {"Screen Size": '75"', "Screen Type": "QLED"},
     "Audio": {"Speaker Output": "20W"},
 }
 TEST_URL = "https://www.kogan.com/au/buy/test-outreach/"
@@ -28,7 +24,10 @@ TEST_URL = "https://www.kogan.com/au/buy/test-outreach/"
 def source_product():
     with SessionLocal() as session:
         sp = SourceProduct(
-            url=TEST_URL, slug="test-outreach", title="Test TV", specs=TEST_SPECS,
+            url=TEST_URL,
+            slug="test-outreach",
+            title="Test TV",
+            specs=TEST_SPECS,
         )
         session.add(sp)
         session.commit()
@@ -82,7 +81,7 @@ class TestFormatSpecBlock:
     def test_formats_groups(self):
         result = _format_spec_block(TEST_SPECS)
         assert "Display:" in result
-        assert "  Screen Size: 75\"" in result
+        assert '  Screen Size: 75"' in result
         assert "  Screen Type: QLED" in result
         assert "Audio:" in result
 
@@ -106,11 +105,15 @@ class TestBuildMessage:
 class TestSendOutreach:
     def _mock_threads(self, source_product, product_url, thread_id):
         """Return a _get_threads_by_platform result scoped to one thread."""
-        return {"alibaba": [{
-            "thread_id": thread_id,
-            "product_url": product_url,
-            "source_product": source_product,
-        }]}
+        return {
+            "alibaba": [
+                {
+                    "thread_id": thread_id,
+                    "product_url": product_url,
+                    "source_product": source_product,
+                }
+            ]
+        }
 
     def test_sends_inquiry_and_updates_state(self, supplier_and_thread, source_product):
         thread = supplier_and_thread
@@ -128,9 +131,20 @@ class TestSendOutreach:
 
         grouped = self._mock_threads(source_product, product_url, thread.id)
 
-        with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
-             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser), \
-             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value=grouped):
+        with (
+            patch(
+                "app.pipeline.stages.s3_outreach.get_platforms",
+                return_value=[mock_platform],
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach.BrowserSession",
+                return_value=mock_browser,
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach._get_threads_by_platform",
+                return_value=grouped,
+            ),
+        ):
             count = send_outreach()
 
         assert count == 1
@@ -161,9 +175,20 @@ class TestSendOutreach:
 
         grouped = self._mock_threads(source_product, product_url, thread.id)
 
-        with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
-             patch("app.agent.stage_three_outreach.BrowserSession", return_value=mock_browser), \
-             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value=grouped):
+        with (
+            patch(
+                "app.pipeline.stages.s3_outreach.get_platforms",
+                return_value=[mock_platform],
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach.BrowserSession",
+                return_value=mock_browser,
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach._get_threads_by_platform",
+                return_value=grouped,
+            ),
+        ):
             count = send_outreach()
 
         assert count == 0
@@ -175,8 +200,16 @@ class TestSendOutreach:
         mock_platform = MagicMock()
         mock_platform.platform.value = "alibaba"
 
-        with patch("app.agent.stage_three_outreach.get_platforms", return_value=[mock_platform]), \
-             patch("app.agent.stage_three_outreach._get_threads_by_platform", return_value={}):
+        with (
+            patch(
+                "app.pipeline.stages.s3_outreach.get_platforms",
+                return_value=[mock_platform],
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach._get_threads_by_platform",
+                return_value={},
+            ),
+        ):
             count = send_outreach()
 
         assert count == 0
