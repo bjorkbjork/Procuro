@@ -43,9 +43,11 @@ class GoogleSettings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_PROJECT_ID: str
-    GOOGLE_AUTH_URI: str
-    GOOGLE_TOKEN_URI: str
-    GOOGLE_AUTH_PROVIDER_X509_CERT_URL: str
+    GOOGLE_AUTH_URI: str = "https://accounts.google.com/o/oauth2/auth"
+    GOOGLE_TOKEN_URI: str = "https://oauth2.googleapis.com/token"
+    GOOGLE_AUTH_PROVIDER_X509_CERT_URL: str = (
+        "https://www.googleapis.com/oauth2/v1/certs"
+    )
     GOOGLE_REFRESH_TOKEN: str = ""
 
     # the ID for the sheet containing both input/output tabs
