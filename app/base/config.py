@@ -1,3 +1,5 @@
+# New attrs must also be added to .github/workflows/deploy.yml.
+# Pydantic defaults apply unless overridden via a GitHub Secret of the same name.
 import logging
 from pathlib import Path
 

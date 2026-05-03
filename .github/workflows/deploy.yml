@@ -9,12 +9,80 @@ jobs:
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1
+        env:
+          GMAIL_ACCOUNT: ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          BEDROCK_REGION: ${{ secrets.BEDROCK_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+          MAINTAINER_EMAIL_ADDRESS: ${{ secrets.MAINTAINER_EMAIL_ADDRESS }}
+          MAX_WORKERS: ${{ secrets.MAX_WORKERS }}
+          GOOGLE_TOTP_SECRET: ${{ secrets.GOOGLE_TOTP_SECRET }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+          PG_HOST: ${{ secrets.PG_HOST }}
+          PG_PORT: ${{ secrets.PG_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
+          GOOGLE_AUTH_URI: ${{ secrets.GOOGLE_AUTH_URI }}
+          GOOGLE_TOKEN_URI: ${{ secrets.GOOGLE_TOKEN_URI }}
+          GOOGLE_AUTH_PROVIDER_X509_CERT_URL: ${{ secrets.GOOGLE_AUTH_PROVIDER_X509_CERT_URL }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          BROWSERBASE_API_KEY: ${{ secrets.BROWSERBASE_API_KEY }}
+          BROWSERBASE_PROJECT_ID: ${{ secrets.BROWSERBASE_PROJECT_ID }}
+          TWOCAPTCHA_API_KEY: ${{ secrets.TWOCAPTCHA_API_KEY }}
+          CHEAP: ${{ secrets.CHEAP }}
+          MODERATE: ${{ secrets.MODERATE }}
+          EXPENSIVE: ${{ secrets.EXPENSIVE }}
+          SOURCING_INTERVAL_MINUTES: ${{ secrets.SOURCING_INTERVAL_MINUTES }}
+          NEGOTIATION_INTERVAL_MINUTES: ${{ secrets.NEGOTIATION_INTERVAL_MINUTES }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: GMAIL_ACCOUNT,GMAIL_PASSWORD,BEDROCK_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,LOGFIRE_TOKEN,MAINTAINER_EMAIL_ADDRESS,MAX_WORKERS,GOOGLE_TOTP_SECRET,PG_USER,PG_PASSWORD,PG_HOST,PG_PORT,DB_NAME,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_PROJECT_ID,GOOGLE_AUTH_URI,GOOGLE_TOKEN_URI,GOOGLE_AUTH_PROVIDER_X509_CERT_URL,GOOGLE_REFRESH_TOKEN,GOOGLE_SHEET_ID,BROWSERBASE_API_KEY,BROWSERBASE_PROJECT_ID,TWOCAPTCHA_API_KEY,CHEAP,MODERATE,EXPENSIVE,SOURCING_INTERVAL_MINUTES,NEGOTIATION_INTERVAL_MINUTES
           script: |
             cd ~/sourcingAgent
-            git pull
+            git fetch --tags
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            echo "Deploying $LATEST_TAG"
+            git checkout "$LATEST_TAG"
+
+            > .env
+            [ -n "$GMAIL_ACCOUNT" ] && echo "GMAIL_ACCOUNT=$GMAIL_ACCOUNT" >> .env
+            [ -n "$GMAIL_PASSWORD" ] && echo "GMAIL_PASSWORD=$GMAIL_PASSWORD" >> .env
+            [ -n "$BEDROCK_REGION" ] && echo "BEDROCK_REGION=$BEDROCK_REGION" >> .env
+            [ -n "$AWS_ACCESS_KEY_ID" ] && echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" >> .env
+            [ -n "$AWS_SECRET_ACCESS_KEY" ] && echo "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" >> .env
+            [ -n "$LOGFIRE_TOKEN" ] && echo "LOGFIRE_TOKEN=$LOGFIRE_TOKEN" >> .env
+            [ -n "$MAINTAINER_EMAIL_ADDRESS" ] && echo "MAINTAINER_EMAIL_ADDRESS=$MAINTAINER_EMAIL_ADDRESS" >> .env
+            [ -n "$MAX_WORKERS" ] && echo "MAX_WORKERS=$MAX_WORKERS" >> .env
+            [ -n "$GOOGLE_TOTP_SECRET" ] && echo "GOOGLE_TOTP_SECRET=$GOOGLE_TOTP_SECRET" >> .env
+            [ -n "$PG_USER" ] && echo "PG_USER=$PG_USER" >> .env
+            [ -n "$PG_PASSWORD" ] && echo "PG_PASSWORD=$PG_PASSWORD" >> .env
+            [ -n "$PG_HOST" ] && echo "PG_HOST=$PG_HOST" >> .env
+            [ -n "$PG_PORT" ] && echo "PG_PORT=$PG_PORT" >> .env
+            [ -n "$DB_NAME" ] && echo "DB_NAME=$DB_NAME" >> .env
+            [ -n "$GOOGLE_CLIENT_ID" ] && echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> .env
+            [ -n "$GOOGLE_CLIENT_SECRET" ] && echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> .env
+            [ -n "$GOOGLE_PROJECT_ID" ] && echo "GOOGLE_PROJECT_ID=$GOOGLE_PROJECT_ID" >> .env
+            [ -n "$GOOGLE_AUTH_URI" ] && echo "GOOGLE_AUTH_URI=$GOOGLE_AUTH_URI" >> .env
+            [ -n "$GOOGLE_TOKEN_URI" ] && echo "GOOGLE_TOKEN_URI=$GOOGLE_TOKEN_URI" >> .env
+            [ -n "$GOOGLE_AUTH_PROVIDER_X509_CERT_URL" ] && echo "GOOGLE_AUTH_PROVIDER_X509_CERT_URL=$GOOGLE_AUTH_PROVIDER_X509_CERT_URL" >> .env
+            [ -n "$GOOGLE_REFRESH_TOKEN" ] && echo "GOOGLE_REFRESH_TOKEN=$GOOGLE_REFRESH_TOKEN" >> .env
+            [ -n "$GOOGLE_SHEET_ID" ] && echo "GOOGLE_SHEET_ID=$GOOGLE_SHEET_ID" >> .env
+            [ -n "$BROWSERBASE_API_KEY" ] && echo "BROWSERBASE_API_KEY=$BROWSERBASE_API_KEY" >> .env
+            [ -n "$BROWSERBASE_PROJECT_ID" ] && echo "BROWSERBASE_PROJECT_ID=$BROWSERBASE_PROJECT_ID" >> .env
+            [ -n "$TWOCAPTCHA_API_KEY" ] && echo "TWOCAPTCHA_API_KEY=$TWOCAPTCHA_API_KEY" >> .env
+            [ -n "$CHEAP" ] && echo "CHEAP=$CHEAP" >> .env
+            [ -n "$MODERATE" ] && echo "MODERATE=$MODERATE" >> .env
+            [ -n "$EXPENSIVE" ] && echo "EXPENSIVE=$EXPENSIVE" >> .env
+            [ -n "$SOURCING_INTERVAL_MINUTES" ] && echo "SOURCING_INTERVAL_MINUTES=$SOURCING_INTERVAL_MINUTES" >> .env
+            [ -n "$NEGOTIATION_INTERVAL_MINUTES" ] && echo "NEGOTIATION_INTERVAL_MINUTES=$NEGOTIATION_INTERVAL_MINUTES" >> .env
+
             docker compose down
             docker compose up --build -d
