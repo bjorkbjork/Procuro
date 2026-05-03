@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
-from app.base.config import model_settings
+from app.base.config import model_settings, settings
 from app.base.llm import Agent, get_model
 from app.db.database import SessionLocal
 from app.db.models.keyvalue import KeyValue
@@ -137,6 +137,29 @@ def _is_platform_notification(subject: str, body: str) -> bool:
     return any(p.search(text) for p in PLATFORM_NOTIFICATION_PATTERNS)
 
 
+def _alert_maintainer(
+    gmail: GmailService,
+    sender_email: str,
+    subject: str,
+    body: str,
+) -> None:
+    """Email the maintainer about a platform message notification."""
+    maintainer = settings.MAINTAINER_EMAIL_ADDRESS
+    if not maintainer:
+        log.warning("MAINTAINER_EMAIL_ADDRESS not set — skipping alert")
+        return
+    gmail.send_email(
+        to=maintainer,
+        subject=f"[Platform Alert] {subject}",
+        body=(
+            f"A supplier may have responded via on-platform messaging.\n\n"
+            f"From: {sender_email}\n"
+            f"Subject: {subject}\n\n"
+            f"{body}"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # LLM triage agent
 # ---------------------------------------------------------------------------
@@ -192,8 +215,8 @@ Rules:
   product, or prior conversation), set thread_id.
 - If a supplier writes in a non-English language, still classify it as \
   reply_supplier — the negotiation agent will handle the language barrier.
-- Platform notifications about new messages should be archived (the actual \
-  supplier message comes via email separately).
+- Platform notifications about new messages should be flagged for human \
+  review — the supplier may be responding on-platform only.
 - When in doubt, flag_human rather than archiving a real supplier reply."""
 
 
@@ -311,7 +334,7 @@ def triage_inbox() -> dict:
 
     counts = {
         "archived_noise": 0,
-        "archived_notification": 0,
+        "flagged_notification": 0,
         "supplier_reply": 0,
         "flagged": 0,
         "errors": 0,
@@ -351,18 +374,28 @@ def triage_inbox() -> dict:
                 counts["archived_noise"] += 1
                 continue
 
-            # Tier 2: no-reply senders — check for platform notifications
+            # Tier 2: no-reply senders — archive unless it's a platform
+            # notification (supplier may be responding on-platform only)
             if _is_no_reply_sender(sender_name, sender_email):
                 if _is_platform_notification(subject, body):
-                    gmail.archive_thread(gmail_thread_id)
-                    log.info(
-                        "Archived platform notification from %s: %s",
+                    counts["flagged_notification"] += 1
+                    # TODO: replace email alert with on-platform message
+                    # check and automated reply once platform integration exists
+                    _alert_maintainer(gmail, sender_email, subject, body)
+                    log.warning(
+                        "Platform notification flagged for review from %s: %s",
                         sender_email,
                         subject[:60],
                     )
-                    counts["archived_notification"] += 1
                     continue
-                # Not a recognized notification — fall through to LLM
+                gmail.archive_thread(gmail_thread_id)
+                log.info(
+                    "Auto-archived no-reply sender %s: %s",
+                    sender_email,
+                    subject[:60],
+                )
+                counts["archived_noise"] += 1
+                continue
 
             # Tier 3: LLM triage
             result = _triage_with_llm(sender_name, sender_email, subject, body)
@@ -417,10 +450,10 @@ def triage_inbox() -> dict:
             counts["errors"] += 1
 
     log.info(
-        "Inbox triage complete: %d archived (noise), %d archived (notifications), "
+        "Inbox triage complete: %d archived (noise), %d flagged (platform notifications), "
         "%d supplier replies, %d flagged, %d errors",
         counts["archived_noise"],
-        counts["archived_notification"],
+        counts["flagged_notification"],
         counts["supplier_reply"],
         counts["flagged"],
         counts["errors"],

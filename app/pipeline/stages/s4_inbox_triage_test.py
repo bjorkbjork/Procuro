@@ -232,11 +232,39 @@ class TestTriageInbox:
         assert counts["archived_noise"] == 1
         mock_gmail.archive_thread.assert_called_once_with("t1")
 
-    def test_archives_platform_notification(self):
+    def test_flags_platform_notification(self):
         msg = _make_gmail_message(
             "no-reply@alibaba.com",
             "You have a new message from supplier",
             "Check your messages",
+            from_name="No-Reply",
+        )
+        mock_gmail = self._mock_gmail([("t1", msg)])
+
+        with (
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch(
+                "app.pipeline.stages.s4_inbox_triage.settings",
+            ) as mock_settings,
+        ):
+            mock_settings.MAINTAINER_EMAIL_ADDRESS = "maintainer@test.com"
+            counts = triage_inbox()
+
+        assert counts["flagged_notification"] == 1
+        mock_gmail.archive_thread.assert_not_called()
+        mock_gmail.send_email.assert_called_once()
+        call_kwargs = mock_gmail.send_email.call_args
+        assert call_kwargs[1]["to"] == "maintainer@test.com"
+        assert "[Platform Alert]" in call_kwargs[1]["subject"]
+
+    def test_archives_noreply_non_notification(self):
+        msg = _make_gmail_message(
+            "no-reply@alibaba.com",
+            "Your order has shipped",
+            "Tracking number: 1234",
             from_name="No-Reply",
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
@@ -246,7 +274,7 @@ class TestTriageInbox:
         ):
             counts = triage_inbox()
 
-        assert counts["archived_notification"] == 1
+        assert counts["archived_noise"] == 1
         mock_gmail.archive_thread.assert_called_once_with("t1")
 
     def test_known_gmail_thread_short_circuits(self, supplier_thread):
