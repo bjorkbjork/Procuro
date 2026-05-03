@@ -252,6 +252,7 @@ def _triage_with_llm(
     """Send an email to the LLM triage agent for classification."""
     agent = Agent(
         model=get_model(model_settings.CHEAP),
+        name="inbox_triage_agent",
         system_prompt=TRIAGE_SYSTEM_PROMPT,
         output_type=TriageResult,
         retries=2,

@@ -121,6 +121,7 @@ class NegotiationResult(BaseModel):
 
 negotiation_agent = Agent(
     model=get_model(model_settings.MODERATE),
+    name="negotiation_agent",
     system_prompt=SYSTEM_PROMPT,
     output_type=NegotiationResult,
     retries=2,

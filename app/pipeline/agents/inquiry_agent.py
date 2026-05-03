@@ -331,6 +331,7 @@ def _classify_from_history(
     tools and structured output to classify the outcome."""
     fallback = _BaseAgent(
         model=get_model(model_settings.MODERATE),
+        name="inquiry_fallback",
         system_prompt=system_prompt,
         output_type=InquiryResult,
         retries=2,
@@ -362,6 +363,7 @@ def send_inquiry_via_agent(
         system_prompt = f"{SYSTEM_PROMPT}\n\n{platform_prompt}"
     agent = Agent(
         model=get_model(model_settings.MODERATE),
+        name="inquiry_agent",
         system_prompt=system_prompt,
         tools=_make_tools(session_id, result_holder),
         retries=5,

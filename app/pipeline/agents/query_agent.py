@@ -20,6 +20,7 @@ Keep the query under 10 words. Return nothing but the query string."""
 
 query_agent = Agent(
     model=get_model(model_settings.CHEAP),
+    name="query_agent",
     system_prompt=SYSTEM_PROMPT,
     output_type=str,
     retries=2,
