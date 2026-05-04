@@ -8,6 +8,11 @@ from app.services.platforms.alibaba.service import (
     search_suppliers,
     send_product_inquiry,
 )
+from app.services.platforms.alibaba.messaging import (
+    read_platform_messages as _read_messages,
+    send_platform_reply as _send_reply,
+)
+from app.services.platforms.platform import PlatformMessage
 
 
 class Platform:
@@ -43,6 +48,24 @@ see it in your screenshot, there is no captcha — just click Submit.
 
 **Confirmation**: Look for "Your inquiry has been sent" or the form disappearing."""
 
+    messaging_agent_prompt = """\
+## Alibaba message center guidance
+
+The messaging interface is at https://message.alibaba.com/. After login it \
+shows a conversation list on the left and the active conversation on the right.
+
+### Reading messages
+- Unread conversations are usually indicated by bold text or a dot/badge.
+- Click a conversation to open it. The supplier name is in the header.
+- Messages appear as chat bubbles — the latest is at the bottom.
+- Use `get url` after opening a conversation to capture its URL.
+
+### Sending replies
+- The message input is at the bottom of the conversation panel.
+- It may be a textarea or a contenteditable div.
+- After typing, click the Send button (usually blue, bottom-right).
+- Verify the message appears in the conversation before reporting SENT."""
+
     def search(self, query: str, page_size: int = 20) -> list[dict]:
         return search_suppliers(query, page_size=page_size)
 
@@ -60,3 +83,21 @@ see it in your screenshot, there is no captcha — just click Submit.
 
     def url_slug(self, product_url: str) -> str:
         return product_url.split("/")[-1].split("?")[0]
+
+    def read_platform_messages(self, page: Page) -> list[PlatformMessage]:
+        results = _read_messages(page)
+        return [
+            PlatformMessage(
+                supplier_name=r["supplier_name"],
+                message_text=r["message_text"],
+                conversation_url=r["conversation_url"],
+                product_url=r.get("product_url"),
+                sent_at=r.get("sent_at"),
+            )
+            for r in results
+        ]
+
+    def send_platform_reply(
+        self, page: Page, conversation_url: str, message: str
+    ) -> bool:
+        return _send_reply(page, conversation_url, message)
