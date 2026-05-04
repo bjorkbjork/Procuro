@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.base.config import settings
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier_product import SupplierProduct
 from app.pipeline.stages.s2_supplier_search import (
@@ -159,7 +159,7 @@ def test_search_and_extract(monkeypatch):
         lambda title, specs: ["75 inch QLED 4K television"],
     )
 
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url=SOURCE_URL,
             slug="test-stage-two",
@@ -180,7 +180,7 @@ def test_search_and_extract(monkeypatch):
             print(f"  Price: {sp.price}  MOQ: {sp.moq}")
             print(f"  Spec groups: {list(sp.specs.keys()) if sp.specs else 'none'}")
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             persisted = (
                 session.query(SupplierProduct)
                 .filter_by(
@@ -193,7 +193,7 @@ def test_search_and_extract(monkeypatch):
                 assert sp.specs, f"No specs for {sp.product_url}"
                 assert sp.title
     finally:
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             session.query(SupplierProduct).filter_by(
                 source_product_id=source_id,
             ).delete()

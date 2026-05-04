@@ -3,10 +3,8 @@ Parsing tests live in app/services/sources/kogan/service_test.py."""
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from app.base.config import PROJECT_ROOT
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.source_product import SourceProduct
 from app.pipeline.stages.s1_spec_extraction import extract_specs
 
@@ -44,6 +42,6 @@ class TestExtractSpecs:
         assert p1.id == p2.id
 
     def test_cleanup(self):
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             session.query(SourceProduct).filter_by(url=TEST_URL).delete()
             session.commit()

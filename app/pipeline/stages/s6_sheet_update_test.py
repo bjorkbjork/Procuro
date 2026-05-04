@@ -6,9 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.source_product import SourceProduct
@@ -23,7 +21,7 @@ TEST_URL = "https://www.kogan.com/au/buy/test-sheet-update/"
 @pytest.fixture
 def thread_with_quote():
     """Create a full thread with an outbound message and a quote."""
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url=TEST_URL,
             slug="test-sheet-update",
@@ -66,6 +64,7 @@ def thread_with_quote():
             direction="outbound",
             subject="Initial outreach",
             body="Hi, we are looking for...",
+            sent_at=datetime.now(timezone.utc),
         )
         session.add(outbound)
 
@@ -93,7 +92,7 @@ def thread_with_quote():
 @pytest.fixture
 def thread_without_quote():
     """Create a thread in OUTREACH_SENT with no quotes yet."""
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-no-quote/",
             slug="test-no-quote",
@@ -196,7 +195,7 @@ class TestUpdateSheet:
 
     def test_skips_new_threads(self):
         """NEW threads should not appear in the sheet."""
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             source = SourceProduct(
                 url="https://www.kogan.com/au/buy/test-new-skip/",
                 slug="test-new-skip",
@@ -247,7 +246,7 @@ class TestUpdateSheet:
         slugs = [r["source_slug"] for r in rows_written]
         assert "test-new-skip" not in slugs
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             session.query(SupplierThread).filter_by(id=thread_id).delete()
             session.query(SupplierProduct).filter_by(id=sp_id).delete()
             session.query(Supplier).filter_by(id=s_id).delete()
