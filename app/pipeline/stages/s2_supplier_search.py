@@ -31,7 +31,6 @@ log = logging.getLogger(__name__)
 
 MATCH_CONFIDENCE_THRESHOLD = 0.6
 MANUFACTURER_KEYWORDS = {"manufacturer", "odm", "oem", "original manufacturer"}
-MAX_CANDIDATES = 100
 
 
 def _is_manufacturer(specs: dict) -> bool:
@@ -342,34 +341,54 @@ def match_candidates(
 
 def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
     """Full Stage 2 pipeline: search, extract, match — retry with new queries
-    until matches are found or the candidate limit is reached."""
+    until the minimum match threshold is met or the candidate limit is reached."""
     attempt = 0
     while True:
         attempt += 1
-        saved = search_and_extract(source_product_id)
-        threads = match_candidates(source_product_id)
-
-        if threads:
-            return threads
+        search_and_extract(source_product_id)
+        match_candidates(source_product_id, only_pending=True)
 
         with SessionLocal() as session:
+            matched_count = (
+                session.query(SupplierThread)
+                .filter_by(source_product_id=source_product_id)
+                .count()
+            )
             total_candidates = (
                 session.query(SupplierProduct)
-                .filter_by(
-                    source_product_id=source_product_id,
-                )
+                .filter_by(source_product_id=source_product_id)
                 .count()
             )
 
-        if total_candidates >= MAX_CANDIDATES:
-            log.warning(
-                "Reached %d candidates with no matches — giving up",
-                total_candidates,
+        if matched_count >= settings.MIN_MATCHES_PER_PRODUCT:
+            log.info(
+                "Reached %d matches (target %d) for source %d — done",
+                matched_count,
+                settings.MIN_MATCHES_PER_PRODUCT,
+                source_product_id,
             )
-            return []
+            break
+
+        if total_candidates >= settings.MAX_CANDIDATES_PER_PRODUCT:
+            log.warning(
+                "Reached %d candidates with only %d/%d matches — giving up",
+                total_candidates,
+                matched_count,
+                settings.MIN_MATCHES_PER_PRODUCT,
+            )
+            break
 
         log.info(
-            "No matches after attempt %d (%d candidates so far) — retrying with new queries",
+            "%d/%d matches after attempt %d (%d candidates) — retrying with new queries",
+            matched_count,
+            settings.MIN_MATCHES_PER_PRODUCT,
             attempt,
             total_candidates,
+        )
+
+    with SessionLocal() as session:
+        return (
+            session.query(SupplierThread)
+            .filter_by(source_product_id=source_product_id)
+            .all()
         )

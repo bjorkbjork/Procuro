@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     MAINTAINER_EMAIL_ADDRESS: str = ""
     MAX_WORKERS: int = 3
     GOOGLE_TOTP_SECRET: str = ""
+    MIN_MATCHES_PER_PRODUCT: int = 10
+    MAX_CANDIDATES_PER_PRODUCT: int = 200
 
 
 class PostgresSettings(BaseSettings):
@@ -91,6 +93,11 @@ class ModelSettings(BaseSettings):
         ("au.anthropic.claude-opus-4-6-v1", 10),
         ("mistral.mistral-large-3-675b-instruct", 100),
         ("deepseek.v3.2", 100),
+    ]
+    MATCH_POOL: list[tuple[str, int]] = [
+        ("moonshotai.kimi-k2.5", 100),
+        ("deepseek.v3.2", 100),
+        ("mistral.mistral-large-3-675b-instruct", 100),
     ]
 
 
