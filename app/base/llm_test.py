@@ -281,6 +281,34 @@ class TestUsageCarriesAcrossRequests:
         assert rm._pool[2][0].request.await_count == 1
 
 
+class TestGetModel:
+    def test_custom_pool_bypasses_tier_lookup(self):
+        import app.base.llm as llm_mod
+
+        custom_pool = [("custom-model-a", 50), ("custom-model-b", 100)]
+        # Clear cache so our test key is fresh
+        llm_mod._pool_instances.pop("test_custom", None)
+        try:
+            rm = llm_mod.get_model("test_custom", pool=custom_pool)
+            assert isinstance(rm, RotatingModel)
+            model_names = [m.model_name for m, _ in rm._pool]
+            assert model_names == ["custom-model-a", "custom-model-b"]
+        finally:
+            llm_mod._pool_instances.pop("test_custom", None)
+
+    def test_custom_pool_is_cached_by_model_id(self):
+        import app.base.llm as llm_mod
+
+        custom_pool = [("cached-model", 10)]
+        llm_mod._pool_instances.pop("test_cached", None)
+        try:
+            first = llm_mod.get_model("test_cached", pool=custom_pool)
+            second = llm_mod.get_model("test_cached", pool=[("other", 99)])
+            assert first is second
+        finally:
+            llm_mod._pool_instances.pop("test_cached", None)
+
+
 class TestSingleModelPool:
     def test_single_model_works(self):
         rm = _make_pool([("only-model", 10)])
