@@ -249,17 +249,43 @@ def cmd_stage4(args):
 
 def _negotiate_single_thread(thread_id: int, dry_run: bool = False):
     """Process a single supplier thread, optionally in dry-run mode."""
-    from app.pipeline.stages.s5_negotiation import _process_thread
+    from app.pipeline.stages.s5_negotiation import (
+        _process_thread,
+        _make_email_reply_fn,
+        _make_platform_reply_fn,
+    )
     from app.pipeline.agents.negotiation_agent import negotiate, build_message_history
     from app.pipeline.agents.match_agent import compare_products
     from app.db.database import SessionLocal
     from app.db.models.message import Message
     from app.db.models.supplier_thread import SupplierThread
+    from app.services.browser import authenticate_platform
     from app.services.gmail import GmailService
+    from app.services.platforms import get_platforms
 
     if not dry_run:
-        gmail = GmailService()
-        status = _process_thread(thread_id, gmail)
+        with SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_id)
+            if not thread:
+                log.error("Thread %d not found", thread_id)
+                return
+            channel = thread.channel or "email"
+            gmail_thread_id = thread.gmail_thread_id
+            platform_thread_url = thread.platform_thread_url
+            platform_name = thread.supplier_product.platform
+
+        if channel == "email":
+            gmail = GmailService()
+            reply_fn = _make_email_reply_fn(gmail, gmail_thread_id)
+        else:
+            platform_objs = {p.platform.value: p for p in get_platforms()}
+            platform = platform_objs[platform_name]
+            context_id = authenticate_platform(platform)
+            reply_fn = _make_platform_reply_fn(
+                platform, context_id, platform_thread_url
+            )
+
+        status = _process_thread(thread_id, reply_fn, channel)
         log.info("Thread %d processed: %s", thread_id, status)
         return
 
