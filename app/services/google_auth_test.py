@@ -5,6 +5,8 @@ Tests credential refresh against real Google APIs.
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from app.services.google_auth import (
     get_google_credentials,
     _load_refresh_token_from_db,
