@@ -173,7 +173,7 @@ def send_inquiry_via_agent(
         system_prompt = f"{SYSTEM_PROMPT}\n\n{platform_prompt}"
 
     agent = Agent(
-        model=get_model(model_settings.MODERATE),
+        model=get_model("browser", pool=model_settings.BROWSER_POOL),
         name="inquiry_agent",
         system_prompt=system_prompt,
         tools=_make_inquiry_tools(toolkit, result_holder),

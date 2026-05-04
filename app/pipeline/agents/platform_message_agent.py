@@ -125,7 +125,7 @@ def read_inbox_via_agent(
     ]
 
     agent = Agent(
-        model=get_model(model_settings.MODERATE),
+        model=get_model("browser", pool=model_settings.BROWSER_POOL),
         name="platform_inbox_reader",
         system_prompt=system_prompt,
         tools=tools,
@@ -224,7 +224,7 @@ def send_reply_via_agent(
     ]
 
     agent = Agent(
-        model=get_model(model_settings.MODERATE),
+        model=get_model("browser", pool=model_settings.BROWSER_POOL),
         name="platform_reply_sender",
         system_prompt=system_prompt,
         tools=tools,
