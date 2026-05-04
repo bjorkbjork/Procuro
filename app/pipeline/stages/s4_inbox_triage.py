@@ -29,6 +29,7 @@ from app.db.models.keyvalue import KeyValue
 from app.db.models.message import Message
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_thread import SupplierThread
+from app.pipeline.browser_executor import BrowserFallbackExecutor, FallbackResult
 from app.services.browser import BrowserSession, authenticate_platform
 from app.services.gmail import GmailService
 from app.services.platforms import get_platforms
@@ -629,78 +630,53 @@ def _record_platform_inbound(
         return True
 
 
-def _poll_platform_messages() -> int:
-    """Poll platform messaging for all platforms with active threads.
+class InboxPollExecutor(BrowserFallbackExecutor):
+    """Concurrent platform inbox polling with agent fallback."""
 
-    Deterministic Playwright read first, agent fallback on failure.
-    Returns count of new messages recorded.
-    """
-    from app.pipeline.agents.platform_message_agent import (
-        InboxStatus,
-        read_inbox_via_agent,
-    )
-    from app.services.platforms.platform import PlatformMessage
+    @property
+    def stage(self) -> str:
+        return "s4_inbox"
 
-    platforms_needed = _get_platforms_with_active_threads()
-    if not platforms_needed:
-        log.info("No platforms with active threads — skipping platform polling")
-        return 0
+    @property
+    def action(self) -> str:
+        return "read_messages"
 
-    platform_objs = {p.platform.value: p for p in get_platforms()}
-    total = 0
+    def get_work_items(self) -> dict[str, list[str]]:
+        platforms_needed = _get_platforms_with_active_threads()
+        return {name: [name] for name in platforms_needed}
 
-    for platform_name in platforms_needed:
-        platform = platform_objs.get(platform_name)
-        if not platform:
-            log.warning("No platform registered for '%s'", platform_name)
-            continue
+    def deterministic_action(self, item: str, page, platform, context_id: str):
+        return platform.read_platform_messages(page)
 
-        log.info("Polling %s message center", platform_name)
-        try:
-            context_id = authenticate_platform(platform)
-        except Exception:
-            log.exception(
-                "Could not authenticate on %s for message polling", platform_name
-            )
-            continue
-
-        browser = BrowserSession(
-            proxy_country="AU",
-            context_id=context_id,
-            keep_alive=True,
+    def agent_fallback(self, item: str, session_id: str, platform) -> FallbackResult:
+        from app.pipeline.agents.platform_message_agent import (
+            InboxStatus,
+            read_inbox_via_agent,
         )
-        browser.__enter__()
-        session_id = browser.session_id
-        messages: list[PlatformMessage] = []
+        from app.services.platforms.platform import PlatformMessage
 
-        try:
-            messages = platform.read_platform_messages(browser.page)
-            browser.__exit__(None, None, None)
-        except Exception:
-            log.exception(
-                "Deterministic platform read failed on %s, trying agent fallback",
-                platform_name,
-            )
-            browser.detach()
-            try:
-                result = read_inbox_via_agent(
-                    session_id,
-                    platform_prompt=platform.messaging_agent_prompt,
+        result = read_inbox_via_agent(
+            session_id,
+            platform_prompt=platform.messaging_agent_prompt,
+        )
+        if result.status == InboxStatus.SUCCESS:
+            messages = [
+                PlatformMessage(
+                    supplier_name=m.supplier_name,
+                    message_text=m.message_text,
+                    conversation_url=m.conversation_url,
                 )
-                if result.status == InboxStatus.SUCCESS:
-                    messages = [
-                        PlatformMessage(
-                            supplier_name=m.supplier_name,
-                            message_text=m.message_text,
-                            conversation_url=m.conversation_url,
-                        )
-                        for m in result.messages
-                    ]
-            except Exception:
-                log.exception("Agent fallback also failed for %s", platform_name)
-            browser.release()
+                for m in result.messages
+            ]
+            return FallbackResult(success=True, result=messages)
+        return FallbackResult(
+            success=False,
+            login_required=(result.status == InboxStatus.LOGIN_REQUIRED),
+        )
 
-        for msg in messages:
+    def on_success(self, item: str, result) -> None:
+        platform_name = item
+        for msg in result:
             thread = _match_supplier_thread(
                 msg.supplier_name, platform_name, msg.product_url
             )
@@ -714,7 +690,6 @@ def _poll_platform_messages() -> int:
                 thread.id, msg.message_text, msg.conversation_url, msg.sent_at
             )
             if is_new:
-                total += 1
                 log.info(
                     "Recorded platform message from '%s' → thread %d",
                     msg.supplier_name,
@@ -727,5 +702,22 @@ def _poll_platform_messages() -> int:
                     thread.id,
                 )
 
+    def thread_label(self, item: str) -> str:
+        return f"poll-{item}"
+
+
+def _poll_platform_messages() -> int:
+    """Poll platform messaging for all platforms with active threads.
+
+    Deterministic Playwright read first, agent fallback on failure.
+    Returns count of new messages recorded.
+    """
+    platforms_needed = _get_platforms_with_active_threads()
+    if not platforms_needed:
+        log.info("No platforms with active threads — skipping platform polling")
+        return 0
+
+    results = InboxPollExecutor().execute()
+    total = sum(len(msgs) for _, msgs in results if msgs)
     log.info("Platform polling complete: %d messages recorded", total)
     return total

@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     GOOGLE_TOTP_SECRET: str = ""
     MIN_MATCHES_PER_PRODUCT: int = 10
     MAX_CANDIDATES_PER_PRODUCT: int = 200
+    AUTOMATION_FAILURE_ALERT_THRESHOLD: float = 0.5
+    AUTOMATION_FAILURE_ALERT_WINDOW: int = 20
+    REAUTH_MAX_RETRIES: int = 5
 
 
 class PostgresSettings(BaseSettings):

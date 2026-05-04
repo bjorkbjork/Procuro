@@ -99,6 +99,14 @@ class TestRegisterJobs:
                     assert call_args.kwargs.get("replace_existing") is True
 
 
+@pytest.fixture(autouse=True)
+def _no_automation_alerts():
+    with patch(
+        "app.pipeline.browser_executor.check_automation_failure_rate",
+    ):
+        yield
+
+
 class TestSourcingPipeline:
     def test_chains_all_stages_on_new_urls(self):
         pending = [

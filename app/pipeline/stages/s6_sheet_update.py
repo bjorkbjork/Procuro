@@ -9,7 +9,10 @@ Rules:
 
 import logging
 
+from sqlalchemy import func as sa_func
+
 from app.db.database import SessionLocal
+from app.db.models.automation_event import AutomationEvent
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
 from app.services.sheets import SheetsService
@@ -94,6 +97,11 @@ def update_sheet() -> int:
     except Exception:
         log.exception("Failed to sync match results tab")
 
+    try:
+        _sync_automation_stats(sheets)
+    except Exception:
+        log.exception("Failed to sync automation stats tab")
+
     return count
 
 
@@ -131,3 +139,43 @@ def _sync_match_results(sheets: SheetsService) -> None:
 
     sheets.sync_match_results(rows)
     log.info("Match results tab synced: %d rows", len(rows))
+
+
+def _sync_automation_stats(sheets: SheetsService) -> None:
+    """Write automation event stats aggregated by (stage, action, outcome)."""
+    with SessionLocal() as session:
+        results = (
+            session.query(
+                AutomationEvent.stage,
+                AutomationEvent.action,
+                AutomationEvent.outcome,
+                sa_func.count().label("count"),
+                sa_func.max(AutomationEvent.created_at).label("latest"),
+            )
+            .group_by(
+                AutomationEvent.stage,
+                AutomationEvent.action,
+                AutomationEvent.outcome,
+            )
+            .order_by(
+                AutomationEvent.stage,
+                AutomationEvent.action,
+                AutomationEvent.outcome,
+            )
+            .all()
+        )
+
+        rows = []
+        for stage, action, outcome, count, latest in results:
+            rows.append(
+                [
+                    stage,
+                    action,
+                    outcome,
+                    str(count),
+                    latest.strftime("%Y-%m-%d %H:%M:%S") if latest else "",
+                ]
+            )
+
+    sheets.sync_automation_stats(rows)
+    log.info("Automation stats tab synced: %d rows", len(rows))
