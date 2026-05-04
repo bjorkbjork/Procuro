@@ -102,6 +102,13 @@ class ModelSettings(BaseSettings):
         ("deepseek.v3.2", 100),
         ("mistral.mistral-large-3-675b-instruct", 100),
     ]
+    # Browser agents send screenshots — excludes models with low image limits
+    BROWSER_POOL: list[tuple[str, int]] = [
+        ("au.anthropic.claude-sonnet-4-6", 10),
+        ("amazon.nova-pro-v1:0", 100),
+        ("qwen.qwen3-vl-235b-a22b", 100),
+        ("moonshotai.kimi-k2.5", 100),
+    ]
 
 
 class SchedulerSettings(BaseSettings):
