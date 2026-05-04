@@ -243,6 +243,12 @@ def _match_single_candidate(
             result.reasoning,
             result.key_differences,
         )
+        with SessionLocal() as session:
+            sp = session.get(SupplierProduct, candidate.id)
+            sp.match_status = "rejected"
+            sp.match_confidence = confidence
+            sp.match_reason = result.reasoning if result else None
+            session.commit()
         return None
 
     log.info(
@@ -263,6 +269,11 @@ def _match_single_candidate(
         if existing:
             return existing
 
+        sp = session.get(SupplierProduct, candidate.id)
+        sp.match_status = "matched"
+        sp.match_confidence = confidence
+        sp.match_reason = result.reasoning if result else None
+
         thread = SupplierThread(
             source_product_id=source_product_id,
             supplier_product_id=candidate.id,
@@ -278,10 +289,13 @@ def _match_single_candidate(
 def match_candidates(
     source_product_id: int,
     match_all: bool = False,
+    *,
+    only_pending: bool = False,
 ) -> list[SupplierThread]:
     """Phase 2: Fuzzy-match each supplier product against the source product.
 
     Pass match_all=True to skip LLM matching and accept all candidates.
+    Pass only_pending=True to skip products already matched or rejected.
     """
     with SessionLocal() as session:
         source = session.get(SourceProduct, source_product_id)
@@ -290,13 +304,12 @@ def match_candidates(
         title = source.title
         specs = source.specs
 
-        candidates = (
-            session.query(SupplierProduct)
-            .filter_by(
-                source_product_id=source_product_id,
-            )
-            .all()
+        q = session.query(SupplierProduct).filter_by(
+            source_product_id=source_product_id,
         )
+        if only_pending:
+            q = q.filter(SupplierProduct.match_status == "pending")
+        candidates = q.all()
 
     if not candidates:
         log.info("No supplier products to match for '%s'", title)

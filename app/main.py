@@ -137,13 +137,41 @@ def sourcing_pipeline():
     _run_stage("6_sheet_update", update_sheet)
 
 
-def retry_stalled_outreach():
+def recover_stalled():
+    """Detect orphaned or stalled work across all pipeline stages and recover.
+
+    Checks (in pipeline order):
+    1. supplier_products with match_status='pending' → re-run matching (stage 2)
+    2. supplier_threads stuck in NEW → re-run outreach (stage 3)
+    """
     from datetime import datetime, timezone, timedelta
 
     from app.db.database import SessionLocal
+    from app.db.models.supplier_product import SupplierProduct
     from app.db.models.supplier_thread import SupplierThread
+    from app.pipeline.stages.s2_supplier_search import match_candidates
     from app.pipeline.stages.s3_outreach import send_outreach
 
+    # --- Stage 2: unmatched supplier products -----------------------------------
+    with SessionLocal() as session:
+        pending_sources = (
+            session.query(SupplierProduct.source_product_id)
+            .filter(SupplierProduct.match_status == "pending")
+            .distinct()
+            .all()
+        )
+    source_ids = [row[0] for row in pending_sources]
+
+    if source_ids:
+        log.info("Recovery: %d source products with pending matches", len(source_ids))
+        _fan_out(
+            "recovery_match",
+            lambda sid: match_candidates(sid, only_pending=True),
+            source_ids,
+            label=str,
+        )
+
+    # --- Stage 3: threads stuck in NEW ------------------------------------------
     cutoff = datetime.now(timezone.utc) - timedelta(
         minutes=scheduler_settings.STALLED_OUTREACH_MINUTES
     )
@@ -157,11 +185,9 @@ def retry_stalled_outreach():
             .count()
         )
 
-    if not stalled:
-        return
-
-    log.info("%d threads stalled in NEW — retrying outreach", stalled)
-    _run_stage("3_outreach_retry", send_outreach)
+    if stalled:
+        log.info("Recovery: %d threads stalled in NEW", stalled)
+        _run_stage("recovery_outreach", send_outreach)
 
 
 def negotiation_pipeline():
@@ -203,10 +229,10 @@ def register_jobs():
         replace_existing=True,
     )
     scheduler.add_job(
-        retry_stalled_outreach,
+        recover_stalled,
         trigger="cron",
         minute=f"*/{sourcing_minutes}",
-        id="retry_stalled_outreach",
+        id="recover_stalled",
         replace_existing=True,
         next_run_time=now,
     )

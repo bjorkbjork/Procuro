@@ -142,17 +142,20 @@ def _alert_maintainer(
     sender_email: str,
     subject: str,
     body: str,
+    *,
+    tag: str = "Platform Alert",
+    preamble: str = "A supplier may have responded via on-platform messaging.",
 ) -> None:
-    """Email the maintainer about a platform message notification."""
+    """Email the maintainer about something that needs attention."""
     maintainer = settings.MAINTAINER_EMAIL_ADDRESS
     if not maintainer:
         log.warning("MAINTAINER_EMAIL_ADDRESS not set — skipping alert")
         return
     gmail.send_email(
         to=maintainer,
-        subject=f"[Platform Alert] {subject}",
+        subject=f"[{tag}] {subject}",
         body=(
-            f"A supplier may have responded via on-platform messaging.\n\n"
+            f"{preamble}\n\n"
             f"From: {sender_email}\n"
             f"Subject: {subject}\n\n"
             f"{body}"
@@ -440,6 +443,14 @@ def triage_inbox() -> dict:
                     sender_name,
                     sender_email,
                     result.reason,
+                )
+                _alert_maintainer(
+                    gmail,
+                    sender_email,
+                    subject,
+                    body,
+                    tag="Flagged",
+                    preamble=f"Flagged for human review: {result.reason}",
                 )
 
             else:
