@@ -5,3 +5,4 @@ from app.db.models.supplier_thread import SupplierThread
 from app.db.models.quote import Quote
 from app.db.models.message import Message
 from app.db.models.keyvalue import KeyValue
+from app.db.models.automation_event import AutomationEvent

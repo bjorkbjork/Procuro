@@ -30,7 +30,11 @@ from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.supplier_thread import SupplierThread
-from app.services.browser import BrowserSession, authenticate_platform
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from app.base.config import settings
+from app.pipeline.browser_executor import FallbackResult, run_with_browser_fallback
+from app.services.browser import authenticate_platform
 from app.services.gmail import GmailService
 from app.services.platforms import get_platforms
 from app.pipeline.stages.s4_inbox_triage import _extract_sender
@@ -296,11 +300,12 @@ def _make_email_reply_fn(gmail: GmailService, gmail_thread_id: str) -> ReplyFn:
 
 
 def _make_platform_reply_fn(
-    platform, context_id: str, conversation_url: str
+    platform, context_id: str, conversation_url: str, thread_id: int
 ) -> ReplyFn:
     """Build a reply_fn that sends via platform messaging.
 
     Tries deterministic Playwright first, falls back to the LLM agent.
+    Uses run_with_browser_fallback for consistent lifecycle and event recording.
     """
     from app.pipeline.agents.platform_message_agent import (
         ReplyStatus,
@@ -308,36 +313,34 @@ def _make_platform_reply_fn(
     )
 
     def reply_fn(body: str) -> str | None:
-        browser = BrowserSession(
-            proxy_country="AU",
-            context_id=context_id,
-            keep_alive=True,
-        )
-        browser.__enter__()
+        msg_id = f"platform_{id(body)}"
 
-        try:
-            success = platform.send_platform_reply(browser.page, conversation_url, body)
-            browser.__exit__(None, None, None)
-            if success:
-                return f"platform_{id(body)}"
-            raise RuntimeError("Deterministic send returned False")
-        except Exception:
-            log.exception("Deterministic platform reply failed, trying agent")
-            session_id = browser.session_id
-            browser.detach()
-            try:
-                result = send_reply_via_agent(
-                    session_id,
-                    conversation_url,
-                    body,
-                    platform_prompt=platform.messaging_agent_prompt,
-                )
-                if result.status == ReplyStatus.SENT:
-                    return f"platform_{id(body)}"
-            except Exception:
-                log.exception("Agent fallback also failed for platform reply")
-            browser.release()
-            return None
+        def deterministic(page):
+            success = platform.send_platform_reply(page, conversation_url, body)
+            if not success:
+                raise RuntimeError("Deterministic send returned False")
+            return msg_id
+
+        def fallback(session_id):
+            result = send_reply_via_agent(
+                session_id,
+                conversation_url,
+                body,
+                platform_prompt=platform.messaging_agent_prompt,
+            )
+            return FallbackResult(
+                success=(result.status == ReplyStatus.SENT),
+                result=msg_id,
+            )
+
+        return run_with_browser_fallback(
+            context_id,
+            deterministic,
+            fallback,
+            stage="s5_negotiation",
+            action="send_reply",
+            supplier_thread_id=thread_id,
+        )
 
     return reply_fn
 
@@ -347,8 +350,26 @@ def _make_platform_reply_fn(
 # ---------------------------------------------------------------------------
 
 
+def _prepare_thread_metadata(thread_ids: list[int]) -> list[dict]:
+    """Load metadata for all threads up front to avoid DB access during pool."""
+    metadata = []
+    with SessionLocal() as session:
+        for thread_id in thread_ids:
+            thread = session.get(SupplierThread, thread_id)
+            metadata.append(
+                {
+                    "thread_id": thread_id,
+                    "channel": thread.channel or "email",
+                    "gmail_thread_id": thread.gmail_thread_id,
+                    "platform_thread_url": thread.platform_thread_url,
+                    "platform_name": thread.supplier_product.platform,
+                }
+            )
+    return metadata
+
+
 def process_negotiations() -> dict:
-    """Process all threads ready for negotiation.
+    """Process all threads ready for negotiation concurrently.
 
     Returns a summary dict with counts per outcome.
     """
@@ -360,55 +381,75 @@ def process_negotiations() -> dict:
 
     log.info("Processing %d threads for negotiation", len(thread_ids))
 
+    # Pre-load thread metadata and authenticate platforms before the pool
+    thread_meta = _prepare_thread_metadata(thread_ids)
     gmail = GmailService()
     platform_objs = {p.platform.value: p for p in get_platforms()}
     platform_contexts: dict[str, str] = {}
+
+    # Pre-authenticate all needed platforms (avoids races in the pool)
+    for meta in thread_meta:
+        if meta["channel"] != "email":
+            pname = meta["platform_name"]
+            if pname not in platform_contexts and pname in platform_objs:
+                try:
+                    platform_contexts[pname] = authenticate_platform(
+                        platform_objs[pname]
+                    )
+                except Exception:
+                    log.exception("Could not authenticate on %s", pname)
+
     counts: dict[str, int] = {}
+    lock = __import__("threading").Lock()
 
-    for thread_id in thread_ids:
-        try:
-            with SessionLocal() as session:
-                thread = session.get(SupplierThread, thread_id)
-                channel = thread.channel or "email"
-                gmail_thread_id = thread.gmail_thread_id
-                platform_thread_url = thread.platform_thread_url
-                platform_name = thread.supplier_product.platform
+    def _process_one(meta: dict) -> str:
+        thread_id = meta["thread_id"]
+        channel = meta["channel"]
 
-            if channel == "email":
-                if not gmail_thread_id:
-                    log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
-                    counts["no_channel"] = counts.get("no_channel", 0) + 1
-                    continue
-                reply_fn = _make_email_reply_fn(gmail, gmail_thread_id)
-            else:
-                if not platform_thread_url:
-                    log.warning(
-                        "Thread %d has no platform_thread_url, skipping", thread_id
-                    )
-                    counts["no_channel"] = counts.get("no_channel", 0) + 1
-                    continue
-                platform = platform_objs.get(platform_name)
-                if not platform:
-                    log.warning(
-                        "No platform for '%s', skipping thread %d",
-                        platform_name,
-                        thread_id,
-                    )
-                    counts["no_channel"] = counts.get("no_channel", 0) + 1
-                    continue
-                # Auth once per platform, reuse across threads
-                if platform_name not in platform_contexts:
-                    platform_contexts[platform_name] = authenticate_platform(platform)
-                reply_fn = _make_platform_reply_fn(
-                    platform, platform_contexts[platform_name], platform_thread_url
+        if channel == "email":
+            if not meta["gmail_thread_id"]:
+                log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
+                return "no_channel"
+            reply_fn = _make_email_reply_fn(gmail, meta["gmail_thread_id"])
+        else:
+            if not meta["platform_thread_url"]:
+                log.warning("Thread %d has no platform_thread_url, skipping", thread_id)
+                return "no_channel"
+            platform = platform_objs.get(meta["platform_name"])
+            if not platform:
+                log.warning(
+                    "No platform for '%s', skipping thread %d",
+                    meta["platform_name"],
+                    thread_id,
                 )
+                return "no_channel"
+            ctx = platform_contexts.get(meta["platform_name"])
+            if not ctx:
+                log.warning(
+                    "No auth context for '%s', skipping thread %d",
+                    meta["platform_name"],
+                    thread_id,
+                )
+                return "no_channel"
+            reply_fn = _make_platform_reply_fn(
+                platform, ctx, meta["platform_thread_url"], thread_id
+            )
 
-            status = _process_thread(thread_id, reply_fn, channel)
-            counts[status] = counts.get(status, 0) + 1
-            log.info("Thread %d → %s", thread_id, status)
-        except Exception:
-            log.exception("Error processing thread %d", thread_id)
-            counts["error"] = counts.get("error", 0) + 1
+        return _process_thread(thread_id, reply_fn, channel)
+
+    with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
+        futures = {pool.submit(_process_one, meta): meta for meta in thread_meta}
+        for future in as_completed(futures):
+            meta = futures[future]
+            try:
+                status = future.result()
+                with lock:
+                    counts[status] = counts.get(status, 0) + 1
+                log.info("Thread %d → %s", meta["thread_id"], status)
+            except Exception:
+                log.exception("Error processing thread %d", meta["thread_id"])
+                with lock:
+                    counts["error"] = counts.get("error", 0) + 1
 
     log.info("Negotiation processing complete: %s", counts)
     return counts

@@ -48,6 +48,15 @@ MATCH_RESULTS_HEADERS = [
     "Product URL",
 ]
 
+AUTOMATION_STATS_TAB = "Automation Stats"
+AUTOMATION_STATS_HEADERS = [
+    "Stage",
+    "Action",
+    "Outcome",
+    "Count",
+    "Latest",
+]
+
 
 class SheetsService:
     def __init__(self):
@@ -175,6 +184,25 @@ class SheetsService:
         last_col = chr(64 + len(MATCH_RESULTS_HEADERS))
 
         # Clear existing data below header
+        self.service.spreadsheets().values().clear(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{tab}!A2:{last_col}",
+        ).execute()
+
+        if rows:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab}!A2:{last_col}{len(rows) + 1}",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
+
+    def sync_automation_stats(self, rows: list[list[str]]) -> None:
+        """Overwrite the Automation Stats tab with the given rows (full replace)."""
+        tab = AUTOMATION_STATS_TAB
+        self._ensure_tab(tab, AUTOMATION_STATS_HEADERS)
+        last_col = chr(64 + len(AUTOMATION_STATS_HEADERS))
+
         self.service.spreadsheets().values().clear(
             spreadsheetId=self.spreadsheet_id,
             range=f"{tab}!A2:{last_col}",

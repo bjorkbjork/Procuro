@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.db import database as _db
+from app.db.models.automation_event import AutomationEvent
 from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
@@ -74,6 +75,7 @@ def supplier_and_thread(source_product):
         session.refresh(thread)
         yield thread
 
+        session.query(AutomationEvent).filter_by(supplier_thread_id=thread.id).delete()
         session.query(Message).filter_by(thread_id=thread.id).delete()
         session.query(SupplierThread).filter_by(id=thread.id).delete()
         session.query(SupplierProduct).filter_by(id=sup_product.id).delete()
@@ -137,22 +139,28 @@ class TestSendOutreach:
 
         with (
             patch(
-                "app.pipeline.stages.s3_outreach.get_platforms",
+                "app.pipeline.browser_executor.get_platforms",
                 return_value=[mock_platform],
             ),
             patch(
-                "app.pipeline.stages.s3_outreach.BrowserSession",
+                "app.pipeline.browser_executor.BrowserSession",
                 return_value=mock_browser,
+            ),
+            patch(
+                "app.pipeline.browser_executor.authenticate_platform",
+                return_value="fake-ctx",
             ),
             patch(
                 "app.pipeline.stages.s3_outreach._get_threads_by_platform",
                 return_value=grouped,
             ),
+            patch(
+                "app.pipeline.browser_executor.bb",
+            ),
         ):
             count = send_outreach()
 
         assert count == 1
-        mock_platform.login.assert_called_once()
         mock_platform.send_inquiry.assert_called_once()
 
         with _db.SessionLocal() as session:
@@ -162,6 +170,15 @@ class TestSendOutreach:
             assert len(msgs) == 1
             assert msgs[0].direction == "outbound"
             assert "QLED" in msgs[0].body
+
+            events = (
+                session.query(AutomationEvent)
+                .filter_by(supplier_thread_id=thread.id)
+                .all()
+            )
+            assert len(events) == 1
+            assert events[0].outcome == "deterministic"
+            assert events[0].stage == "s3_outreach"
 
     def test_skips_on_inquiry_failure(self, supplier_and_thread, source_product):
         thread = supplier_and_thread
@@ -179,18 +196,32 @@ class TestSendOutreach:
 
         grouped = self._mock_threads(source_product, product_url, thread.id)
 
+        mock_agent_result = MagicMock()
+        mock_agent_result.status.value = "failed"
+
         with (
             patch(
-                "app.pipeline.stages.s3_outreach.get_platforms",
+                "app.pipeline.browser_executor.get_platforms",
                 return_value=[mock_platform],
             ),
             patch(
-                "app.pipeline.stages.s3_outreach.BrowserSession",
+                "app.pipeline.browser_executor.BrowserSession",
                 return_value=mock_browser,
+            ),
+            patch(
+                "app.pipeline.browser_executor.authenticate_platform",
+                return_value="fake-ctx",
             ),
             patch(
                 "app.pipeline.stages.s3_outreach._get_threads_by_platform",
                 return_value=grouped,
+            ),
+            patch(
+                "app.pipeline.stages.s3_outreach._retry_with_agent",
+                side_effect=RuntimeError("agent also failed"),
+            ),
+            patch(
+                "app.pipeline.browser_executor.bb",
             ),
         ):
             count = send_outreach()
@@ -200,13 +231,21 @@ class TestSendOutreach:
             updated = session.get(SupplierThread, thread.id)
             assert updated.state == "NEW"
 
+            events = (
+                session.query(AutomationEvent)
+                .filter_by(supplier_thread_id=thread.id)
+                .all()
+            )
+            assert len(events) == 1
+            assert events[0].outcome == "failed"
+
     def test_no_new_threads_is_noop(self):
         mock_platform = MagicMock()
         mock_platform.platform.value = "alibaba"
 
         with (
             patch(
-                "app.pipeline.stages.s3_outreach.get_platforms",
+                "app.pipeline.browser_executor.get_platforms",
                 return_value=[mock_platform],
             ),
             patch(

@@ -136,6 +136,10 @@ def sourcing_pipeline():
     _run_stage("3_outreach", send_outreach)
     _run_stage("6_sheet_update", update_sheet)
 
+    from app.pipeline.browser_executor import check_automation_failure_rate
+
+    check_automation_failure_rate()
+
 
 def recover_stalled():
     """Detect orphaned or stalled work across all pipeline stages and recover.
@@ -242,6 +246,10 @@ def negotiation_pipeline():
         _run_stage("6_sheet_update", update_sheet)
     else:
         log.info("Negotiation pipeline: no supplier replies, skipping stages 5-6")
+
+    from app.pipeline.browser_executor import check_automation_failure_rate
+
+    check_automation_failure_rate()
 
 
 def register_jobs():
