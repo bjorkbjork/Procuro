@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct

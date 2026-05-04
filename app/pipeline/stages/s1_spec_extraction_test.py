@@ -3,6 +3,8 @@ Parsing tests live in app/services/sources/kogan/service_test.py."""
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from app.base.config import PROJECT_ROOT
 from app.db.database import SessionLocal
 from app.db.models.source_product import SourceProduct

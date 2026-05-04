@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from app.base.config import PROJECT_ROOT
 from app.pipeline.triggers.input_sheet import get_new_urls
 from app.db.database import SessionLocal

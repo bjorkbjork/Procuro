@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from app.pipeline.agents.match_agent import MatchResult
 from app.pipeline.agents.negotiation_agent import (
     ExtractedQuote,
