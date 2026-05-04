@@ -1,10 +1,16 @@
-"""Stage 4: Monitor Gmail inbox and triage supplier replies.
+"""Stage 4: Monitor Gmail inbox and platform messaging, triage supplier replies.
 
-Three-tier filter:
+Gmail triage — three-tier filter:
 1. Auto-archive known noise (AWS, Google, Alibaba notifications, etc.)
-2. No-reply senders not in the ignore list get scanned for platform message
-   notifications (Alibaba/GlobalSources have their own messaging systems)
+2. No-reply senders: platform notification emails are archived (the platform
+   polling below handles the actual messages directly)
 3. Everything else goes to the LLM triage agent for classification
+
+Platform polling — for each platform with active threads:
+1. Authenticate and open the messaging inbox
+2. Deterministic Playwright read, agent fallback on failure
+3. Match messages to supplier threads by supplier name
+4. Record inbound messages with channel='platform'
 
 The ignore-email list is stored in the keyvalue table and the LLM agent can
 add new addresses to it via a tool."""
@@ -21,8 +27,12 @@ from app.base.llm import Agent, get_model
 from app.db.database import SessionLocal
 from app.db.models.keyvalue import KeyValue
 from app.db.models.message import Message
+from app.db.models.supplier import Supplier
 from app.db.models.supplier_thread import SupplierThread
+from app.services.browser import BrowserSession, authenticate_platform
 from app.services.gmail import GmailService
+from app.services.platforms import get_platforms
+from app.services.platforms.platform import SupplierPlatform
 
 log = logging.getLogger(__name__)
 
@@ -378,26 +388,18 @@ def triage_inbox() -> dict:
                 counts["archived_noise"] += 1
                 continue
 
-            # Tier 2: no-reply senders — archive unless it's a platform
-            # notification (supplier may be responding on-platform only)
+            # Tier 2: no-reply senders — archive. Platform notification
+            # emails are now handled by _poll_platform_messages() below.
             if _is_no_reply_sender(sender_name, sender_email):
                 if _is_platform_notification(subject, body):
                     counts["flagged_notification"] += 1
-                    # TODO: replace email alert with on-platform message
-                    # check and automated reply once platform integration exists
-                    _alert_maintainer(gmail, sender_email, subject, body)
-                    log.warning(
-                        "Platform notification flagged for review from %s: %s",
+                    log.info(
+                        "Archived platform notification from %s: %s "
+                        "(platform polling handles the actual message)",
                         sender_email,
                         subject[:60],
                     )
-                    continue
                 gmail.archive_thread(gmail_thread_id)
-                log.info(
-                    "Auto-archived no-reply sender %s: %s",
-                    sender_email,
-                    subject[:60],
-                )
                 counts["archived_noise"] += 1
                 continue
 
@@ -462,7 +464,7 @@ def triage_inbox() -> dict:
             counts["errors"] += 1
 
     log.info(
-        "Inbox triage complete: %d archived (noise), %d flagged (platform notifications), "
+        "Gmail triage: %d archived (noise), %d platform notifications, "
         "%d supplier replies, %d flagged, %d errors",
         counts["archived_noise"],
         counts["flagged_notification"],
@@ -470,4 +472,260 @@ def triage_inbox() -> dict:
         counts["flagged"],
         counts["errors"],
     )
+
+    # Platform message polling
+    platform_count = _poll_platform_messages()
+    counts["platform_messages"] = platform_count
+
+    log.info("Inbox triage complete: %s", counts)
     return counts
+
+
+# ---------------------------------------------------------------------------
+# Platform message polling
+# ---------------------------------------------------------------------------
+
+
+def _get_platforms_with_active_threads() -> set[str]:
+    """Return platform names that have threads awaiting replies."""
+    with SessionLocal() as session:
+        threads = (
+            session.query(SupplierThread)
+            .filter(
+                SupplierThread.state.in_(
+                    ["OUTREACH_SENT", "AWAITING_REPLY", "NEGOTIATING"]
+                )
+            )
+            .all()
+        )
+        return {t.supplier_product.platform for t in threads}
+
+
+def _match_supplier_thread(
+    supplier_name: str,
+    platform_name: str,
+    product_url: str | None = None,
+) -> SupplierThread | None:
+    """Match a platform message to an active supplier thread.
+
+    When product_url is available (extracted from the inquiry card in the
+    conversation), matches via supplier_products.product_url for precision —
+    handles the case where one supplier has multiple threads for different
+    products. Falls back to supplier name matching when product_url is absent.
+    """
+    from app.db.models.supplier_product import SupplierProduct
+
+    active_states = ["OUTREACH_SENT", "AWAITING_REPLY", "NEGOTIATING"]
+
+    with SessionLocal() as session:
+        if product_url:
+            thread = (
+                session.query(SupplierThread)
+                .join(
+                    SupplierProduct,
+                    SupplierThread.supplier_product_id == SupplierProduct.id,
+                )
+                .filter(
+                    SupplierProduct.product_url == product_url,
+                    SupplierThread.state.in_(active_states),
+                )
+                .first()
+            )
+            if thread:
+                log.info(
+                    "Matched thread %d via product_url: %s", thread.id, product_url
+                )
+                session.expunge(thread)
+                return thread
+            log.warning(
+                "No thread matched product_url %s — falling back to name", product_url
+            )
+
+        supplier = (
+            session.query(Supplier)
+            .filter(
+                Supplier.name == supplier_name,
+                Supplier.platform == platform_name,
+            )
+            .first()
+        )
+
+        if not supplier:
+            supplier = (
+                session.query(Supplier)
+                .filter(
+                    Supplier.name.ilike(f"%{supplier_name}%"),
+                    Supplier.platform == platform_name,
+                )
+                .first()
+            )
+
+        if not supplier:
+            suppliers = (
+                session.query(Supplier).filter(Supplier.platform == platform_name).all()
+            )
+            for s in suppliers:
+                if s.name.lower() in supplier_name.lower():
+                    supplier = s
+                    break
+
+        if not supplier:
+            return None
+
+        thread = (
+            session.query(SupplierThread)
+            .filter(
+                SupplierThread.supplier_id == supplier.id,
+                SupplierThread.state.in_(active_states),
+            )
+            .order_by(SupplierThread.last_updated.desc())
+            .first()
+        )
+        if thread:
+            session.expunge(thread)
+        return thread
+
+
+def _record_platform_inbound(
+    thread_id: int,
+    message_text: str,
+    conversation_url: str,
+    sent_at: str | None = None,
+) -> bool:
+    """Record an inbound platform message and update thread state.
+
+    Returns True if a new message was recorded, False if it was a duplicate.
+    Deduplicates by checking for an existing message with the same body text
+    on the same thread — platform messages have no unique ID like Gmail does.
+    """
+    from datetime import datetime, timezone
+
+    with SessionLocal() as session:
+        existing = (
+            session.query(Message)
+            .filter_by(thread_id=thread_id, direction="inbound", body=message_text)
+            .first()
+        )
+        if existing:
+            return False
+
+        msg = Message(
+            thread_id=thread_id,
+            direction="inbound",
+            channel="platform",
+            body=message_text,
+        )
+        if sent_at:
+            msg.sent_at = datetime.fromisoformat(sent_at).replace(tzinfo=timezone.utc)
+        session.add(msg)
+        thread = session.get(SupplierThread, thread_id)
+        if thread:
+            if thread.state == "OUTREACH_SENT":
+                thread.state = "AWAITING_REPLY"
+            thread.channel = "platform"
+            if not thread.platform_thread_url:
+                thread.platform_thread_url = conversation_url
+        session.commit()
+        return True
+
+
+def _poll_platform_messages() -> int:
+    """Poll platform messaging for all platforms with active threads.
+
+    Deterministic Playwright read first, agent fallback on failure.
+    Returns count of new messages recorded.
+    """
+    from app.pipeline.agents.platform_message_agent import (
+        InboxStatus,
+        read_inbox_via_agent,
+    )
+    from app.services.platforms.platform import PlatformMessage
+
+    platforms_needed = _get_platforms_with_active_threads()
+    if not platforms_needed:
+        log.info("No platforms with active threads — skipping platform polling")
+        return 0
+
+    platform_objs = {p.platform.value: p for p in get_platforms()}
+    total = 0
+
+    for platform_name in platforms_needed:
+        platform = platform_objs.get(platform_name)
+        if not platform:
+            log.warning("No platform registered for '%s'", platform_name)
+            continue
+
+        log.info("Polling %s message center", platform_name)
+        try:
+            context_id = authenticate_platform(platform)
+        except Exception:
+            log.exception(
+                "Could not authenticate on %s for message polling", platform_name
+            )
+            continue
+
+        browser = BrowserSession(
+            proxy_country="AU",
+            context_id=context_id,
+            keep_alive=True,
+        )
+        browser.__enter__()
+        session_id = browser.session_id
+        messages: list[PlatformMessage] = []
+
+        try:
+            messages = platform.read_platform_messages(browser.page)
+            browser.__exit__(None, None, None)
+        except Exception:
+            log.exception(
+                "Deterministic platform read failed on %s, trying agent fallback",
+                platform_name,
+            )
+            browser.detach()
+            try:
+                result = read_inbox_via_agent(
+                    session_id,
+                    platform_prompt=platform.messaging_agent_prompt,
+                )
+                if result.status == InboxStatus.SUCCESS:
+                    messages = [
+                        PlatformMessage(
+                            supplier_name=m.supplier_name,
+                            message_text=m.message_text,
+                            conversation_url=m.conversation_url,
+                        )
+                        for m in result.messages
+                    ]
+            except Exception:
+                log.exception("Agent fallback also failed for %s", platform_name)
+            browser.release()
+
+        for msg in messages:
+            thread = _match_supplier_thread(
+                msg.supplier_name, platform_name, msg.product_url
+            )
+            if not thread:
+                log.warning(
+                    "Could not match platform message from '%s' to any thread",
+                    msg.supplier_name,
+                )
+                continue
+            is_new = _record_platform_inbound(
+                thread.id, msg.message_text, msg.conversation_url, msg.sent_at
+            )
+            if is_new:
+                total += 1
+                log.info(
+                    "Recorded platform message from '%s' → thread %d",
+                    msg.supplier_name,
+                    thread.id,
+                )
+            else:
+                log.debug(
+                    "Skipped duplicate platform message from '%s' on thread %d",
+                    msg.supplier_name,
+                    thread.id,
+                )
+
+    log.info("Platform polling complete: %d messages recorded", total)
+    return total
