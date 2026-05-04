@@ -9,6 +9,7 @@ from app.services.google_auth import get_google_credentials
 
 INPUT_TAB = "Input"
 OUTPUT_TAB = "Output"
+MATCH_RESULTS_TAB = "Match Results"
 
 INPUT_COLUMNS = {"url": 0, "status": 1}
 
@@ -24,6 +25,28 @@ OUTPUT_COLUMNS = {
     "last_updated_date": 8,
     "initial_outreach_date": 9,
 }
+
+MATCH_RESULTS_COLUMNS = {
+    "source_product": 0,
+    "supplier_product": 1,
+    "supplier_name": 2,
+    "platform": 3,
+    "status": 4,
+    "confidence": 5,
+    "reason": 6,
+    "product_url": 7,
+}
+
+MATCH_RESULTS_HEADERS = [
+    "Source Product",
+    "Supplier Product",
+    "Supplier",
+    "Platform",
+    "Status",
+    "Confidence",
+    "Reason",
+    "Product URL",
+]
 
 
 class SheetsService:
@@ -126,6 +149,44 @@ class SheetsService:
 
         sheet_row = len(rows) + 2
         self._write_output_row(sheet_row, data)
+
+    def _ensure_tab(self, tab_name: str, headers: list[str] | None = None) -> None:
+        """Create a tab if it doesn't exist. Optionally write a header row."""
+        meta = self.get_spreadsheet_metadata()
+        for s in meta["sheets"]:
+            if s["properties"]["title"] == tab_name:
+                return
+        self.service.spreadsheets().batchUpdate(
+            spreadsheetId=self.spreadsheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": tab_name}}}]},
+        ).execute()
+        if headers:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab_name}!A1:{chr(64 + len(headers))}1",
+                valueInputOption="RAW",
+                body={"values": [headers]},
+            ).execute()
+
+    def sync_match_results(self, rows: list[list[str]]) -> None:
+        """Overwrite the Match Results tab with the given rows (full replace)."""
+        tab = MATCH_RESULTS_TAB
+        self._ensure_tab(tab, MATCH_RESULTS_HEADERS)
+        last_col = chr(64 + len(MATCH_RESULTS_HEADERS))
+
+        # Clear existing data below header
+        self.service.spreadsheets().values().clear(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{tab}!A2:{last_col}",
+        ).execute()
+
+        if rows:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab}!A2:{last_col}{len(rows) + 1}",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
 
     def delete_output_row(self, slug: str, supplier_name: str) -> None:
         idx = self._find_output_row(slug, supplier_name)
