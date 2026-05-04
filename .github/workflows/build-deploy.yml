@@ -15,7 +15,28 @@ env:
   IMAGE: ghcr.io/bjorkbjork/sourcing-agent
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PDM
+        run: pip install pdm
+
+      - name: Install dependencies
+        run: pdm install --dev
+
+      - name: Run tests
+        run: pdm run pytest
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       packages: write
