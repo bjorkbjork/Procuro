@@ -38,7 +38,7 @@ class MatchResult(BaseModel):
 
 
 match_agent = Agent(
-    model=get_model(model_settings.MODERATE),
+    model=get_model("match", pool=model_settings.MATCH_POOL),
     name="match_agent",
     system_prompt=SYSTEM_PROMPT,
     output_type=MatchResult,

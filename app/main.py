@@ -142,17 +142,21 @@ def recover_stalled():
 
     Checks (in pipeline order):
     1. supplier_products with match_status='pending' → re-run matching (stage 2)
-    2. supplier_threads stuck in NEW → re-run outreach (stage 3)
+    2. source_products under match threshold → re-run full search loop (stage 2)
+    3. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
     from datetime import datetime, timezone, timedelta
 
     from app.db.database import SessionLocal
     from app.db.models.supplier_product import SupplierProduct
     from app.db.models.supplier_thread import SupplierThread
-    from app.pipeline.stages.s2_supplier_search import match_candidates
+    from app.pipeline.stages.s2_supplier_search import (
+        match_candidates,
+        run_supplier_search,
+    )
     from app.pipeline.stages.s3_outreach import send_outreach
 
-    # --- Stage 2: unmatched supplier products -----------------------------------
+    # --- Stage 2a: unmatched supplier products ----------------------------------
     with SessionLocal() as session:
         pending_sources = (
             session.query(SupplierProduct.source_product_id)
@@ -160,14 +164,49 @@ def recover_stalled():
             .distinct()
             .all()
         )
-    source_ids = [row[0] for row in pending_sources]
+    pending_sids = set(row[0] for row in pending_sources)
 
-    if source_ids:
-        log.info("Recovery: %d source products with pending matches", len(source_ids))
+    if pending_sids:
+        log.info("Recovery: %d source products with pending matches", len(pending_sids))
         _fan_out(
             "recovery_match",
             lambda sid: match_candidates(sid, only_pending=True),
-            source_ids,
+            list(pending_sids),
+            label=str,
+        )
+
+    # --- Stage 2b: under-matched source products --------------------------------
+    with SessionLocal() as session:
+        all_searched_sids = {
+            row[0]
+            for row in session.query(SupplierProduct.source_product_id).distinct().all()
+        } - pending_sids
+
+        under_matched = []
+        for sid in all_searched_sids:
+            thread_count = (
+                session.query(SupplierThread).filter_by(source_product_id=sid).count()
+            )
+            if thread_count >= settings.MIN_MATCHES_PER_PRODUCT:
+                continue
+            cand_count = (
+                session.query(SupplierProduct).filter_by(source_product_id=sid).count()
+            )
+            if cand_count >= settings.MAX_CANDIDATES_PER_PRODUCT:
+                continue
+            under_matched.append(sid)
+
+    if under_matched:
+        log.info(
+            "Recovery: %d source products under %d-match threshold",
+            len(under_matched),
+            settings.MIN_MATCHES_PER_PRODUCT,
+        )
+        _fan_out(
+            "recovery_search",
+            run_supplier_search,
+            under_matched,
+            max_workers=1,
             label=str,
         )
 

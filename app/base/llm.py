@@ -280,15 +280,18 @@ _TIER_POOLS = {
 }
 
 
-def get_model(model_id: str = model_settings.MODERATE) -> RotatingModel:
+def get_model(
+    model_id: str = model_settings.MODERATE,
+    pool: list[tuple[str, int]] | None = None,
+) -> RotatingModel:
     """Return a shared RotatingModel for the given tier. RPM state is shared
-    across all callers so rate limits are tracked globally."""
+    across all callers so rate limits are tracked globally.
+
+    Pass a custom *pool* to bypass the tier lookup (cached under model_id)."""
     with _pool_lock:
         if model_id not in _pool_instances:
-            pool = _TIER_POOLS.get(model_id)
-            if pool is None:
-                pool = [(model_id, 10)]
-            _pool_instances[model_id] = RotatingModel(pool)
+            resolved = pool or _TIER_POOLS.get(model_id) or [(model_id, 10)]
+            _pool_instances[model_id] = RotatingModel(resolved)
         return _pool_instances[model_id]
 
 
