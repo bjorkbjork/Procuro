@@ -5,9 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.keyvalue import KeyValue
 from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
@@ -32,11 +30,11 @@ from app.pipeline.stages.s4_inbox_triage import (
 @pytest.fixture(autouse=True)
 def clean_ignore_list():
     """Remove the ignore-emails KV entry before and after each test."""
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         session.query(KeyValue).filter_by(key=IGNORE_EMAILS_KEY).delete()
         session.commit()
     yield
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         session.query(KeyValue).filter_by(key=IGNORE_EMAILS_KEY).delete()
         session.commit()
 
@@ -131,7 +129,7 @@ class TestIgnoreList:
 
     def test_persists_to_db(self):
         _get_ignore_emails()
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             row = session.get(KeyValue, IGNORE_EMAILS_KEY)
             assert row is not None
             assert set(row.value) == set(DEFAULT_IGNORE_EMAILS)
@@ -163,7 +161,7 @@ class TestIgnoreList:
 
 @pytest.fixture
 def supplier_thread():
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-triage/",
             slug="test-triage",
@@ -211,6 +209,14 @@ def supplier_thread():
 
 
 class TestTriageInbox:
+    @pytest.fixture(autouse=True)
+    def _no_platform_polling(self):
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage._poll_platform_messages",
+            return_value=0,
+        ):
+            yield
+
     def _mock_gmail(self, threads_and_messages: list[tuple[str, dict]]):
         """Build a mock GmailService with the given thread stubs and messages."""
         mock = MagicMock()
@@ -243,24 +249,16 @@ class TestTriageInbox:
         )
         mock_gmail = self._mock_gmail([("t1", msg)])
 
-        with (
-            patch(
-                "app.pipeline.stages.s4_inbox_triage.GmailService",
-                return_value=mock_gmail,
-            ),
-            patch(
-                "app.pipeline.stages.s4_inbox_triage.settings",
-            ) as mock_settings,
+        with patch(
+            "app.pipeline.stages.s4_inbox_triage.GmailService",
+            return_value=mock_gmail,
         ):
-            mock_settings.MAINTAINER_EMAIL_ADDRESS = "maintainer@test.com"
             counts = triage_inbox()
 
         assert counts["flagged_notification"] == 1
-        mock_gmail.archive_thread.assert_not_called()
-        mock_gmail.send_email.assert_called_once()
-        call_kwargs = mock_gmail.send_email.call_args
-        assert call_kwargs[1]["to"] == "maintainer@test.com"
-        assert "[Platform Alert]" in call_kwargs[1]["subject"]
+        assert counts["archived_noise"] == 1
+        mock_gmail.archive_thread.assert_called_once_with("t1")
+        mock_gmail.send_email.assert_not_called()
 
     def test_archives_noreply_non_notification(self):
         msg = _make_gmail_message(
@@ -281,7 +279,7 @@ class TestTriageInbox:
 
     def test_known_gmail_thread_short_circuits(self, supplier_thread):
         """Messages on an already-linked Gmail thread skip LLM triage."""
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, supplier_thread.id)
             thread.gmail_thread_id = "known_t1"
             session.commit()
@@ -302,7 +300,7 @@ class TestTriageInbox:
         assert counts["supplier_reply"] == 1
         mock_gmail.archive_thread.assert_called_once_with("known_t1")
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             msgs = (
                 session.query(Message)
                 .filter_by(
@@ -345,7 +343,7 @@ class TestTriageInbox:
         # Spec: "archive every processed thread"
         mock_gmail.archive_thread.assert_called_once_with("t1")
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, supplier_thread.id)
             assert thread.state == "AWAITING_REPLY"
             assert thread.gmail_thread_id == "t1"
@@ -422,7 +420,7 @@ class TestTriageInbox:
             msg_id="gmsg_dup",
         )
         # Pre-insert the message
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             session.add(
                 Message(
                     thread_id=supplier_thread.id,
@@ -454,7 +452,7 @@ class TestTriageInbox:
             MockAgent.return_value.run_sync.return_value = mock_run
             triage_inbox()
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             msgs = (
                 session.query(Message)
                 .filter_by(

@@ -4,11 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from app.base.config import PROJECT_ROOT
 from app.pipeline.triggers.input_sheet import get_new_urls
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.source_product import SourceProduct
 
 FAKE_URL_1 = "https://www.kogan.com/au/buy/test-trigger-1/"
@@ -18,7 +16,7 @@ FAKE_URL_2 = "https://www.kogan.com/au/buy/test-trigger-2/"
 @pytest.fixture(autouse=True)
 def cleanup():
     yield
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         session.query(SourceProduct).filter(
             SourceProduct.url.in_([FAKE_URL_1, FAKE_URL_2])
         ).delete()
@@ -57,7 +55,7 @@ class TestGetNewUrls:
         assert get_new_urls() == []
 
     def test_marks_existing_product_as_done(self, mock_sheets):
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             session.add(
                 SourceProduct(
                     url=FAKE_URL_1, slug="test-trigger-1", title="Test", specs={}

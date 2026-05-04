@@ -7,15 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from app.pipeline.agents.match_agent import MatchResult
 from app.pipeline.agents.negotiation_agent import (
     ExtractedQuote,
     NegotiationAction,
     NegotiationResult,
 )
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.source_product import SourceProduct
@@ -34,7 +32,7 @@ from app.pipeline.stages.s5_negotiation import (
 @pytest.fixture
 def thread_awaiting_reply():
     """Thread in AWAITING_REPLY with one outbound and one inbound message."""
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-negotiate/",
             slug="test-negotiate",
@@ -100,7 +98,7 @@ def thread_awaiting_reply():
 
     yield thread_id
 
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         session.query(Quote).filter_by(thread_id=thread_id).delete()
         session.query(Message).filter_by(thread_id=thread_id).delete()
         session.query(SupplierThread).filter_by(id=thread_id).delete()
@@ -113,7 +111,7 @@ def thread_awaiting_reply():
 @pytest.fixture
 def thread_negotiating():
     """Thread in NEGOTIATING with multiple rounds of messages."""
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         source = SourceProduct(
             url="https://www.kogan.com/au/buy/test-negotiate-round2/",
             slug="test-negotiate-round2",
@@ -196,7 +194,7 @@ def thread_negotiating():
 
     yield thread_id
 
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         session.query(Quote).filter_by(thread_id=thread_id).delete()
         session.query(Message).filter_by(thread_id=thread_id).delete()
         session.query(SupplierThread).filter_by(id=thread_id).delete()
@@ -239,7 +237,7 @@ class TestGetReadyThreads:
         assert thread_negotiating in ids
 
     def test_skips_thread_with_future_respond_after(self, thread_awaiting_reply):
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             thread.respond_after = datetime.now(timezone.utc) + timedelta(hours=24)
             session.commit()
@@ -248,7 +246,7 @@ class TestGetReadyThreads:
         assert thread_awaiting_reply not in ids
 
     def test_includes_thread_with_past_respond_after(self, thread_awaiting_reply):
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             thread.respond_after = datetime.now(timezone.utc) - timedelta(hours=1)
             session.commit()
@@ -277,7 +275,7 @@ class TestRunSpecCheck:
             passed = _run_spec_check(thread_awaiting_reply)
 
         assert passed is True
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             assert thread.state == "SPEC_CHECK_PASS"
 
@@ -295,7 +293,7 @@ class TestRunSpecCheck:
             passed = _run_spec_check(thread_awaiting_reply)
 
         assert passed is False
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             assert thread.state == "SPEC_CHECK_FAIL"
 
@@ -308,7 +306,7 @@ class TestRunSpecCheck:
 class TestRecordQuote:
     def test_records_quote(self, thread_awaiting_reply):
         _record_quote(thread_awaiting_reply, 200.0, 300, "30-45 days")
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             quotes = (
                 session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
             )
@@ -319,7 +317,7 @@ class TestRecordQuote:
 
     def test_skips_when_no_price(self, thread_awaiting_reply):
         _record_quote(thread_awaiting_reply, None, 300, "30 days")
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             quotes = (
                 session.query(Quote).filter_by(thread_id=thread_awaiting_reply).all()
             )
@@ -339,17 +337,17 @@ class TestProcessThreadSpecCheck:
             reasoning="Wrong size",
             key_differences=["65 inch vs 75 inch"],
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.compare_products",
             return_value=match_result,
         ):
-            status = _process_thread(thread_awaiting_reply, gmail)
+            status = _process_thread(thread_awaiting_reply, reply_fn, "email")
 
         assert status == "spec_check_fail"
-        gmail.reply_to_thread.assert_called_once()
-        with SessionLocal() as session:
+        reply_fn.assert_called_once()
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             assert thread.state == "CLOSED"
 
@@ -366,7 +364,7 @@ class TestProcessThreadSpecCheck:
             extracted_quote=ExtractedQuote(price_usd=200.0, moq=300),
             reasoning="First round pushback",
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with (
             patch(
@@ -377,11 +375,11 @@ class TestProcessThreadSpecCheck:
                 "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
             ),
         ):
-            status = _process_thread(thread_awaiting_reply, gmail)
+            status = _process_thread(thread_awaiting_reply, reply_fn, "email")
 
         assert status == "replied"
-        gmail.reply_to_thread.assert_called_once()
-        with SessionLocal() as session:
+        reply_fn.assert_called_once()
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             assert thread.state == "NEGOTIATING"
             assert thread.negotiation_rounds == 1
@@ -401,19 +399,19 @@ class TestProcessThreadNegotiation:
             extracted_quote=ExtractedQuote(price_usd=42.0, moq=1000),
             reasoning="Still room to negotiate",
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
         ):
-            status = _process_thread(thread_negotiating, gmail)
+            status = _process_thread(thread_negotiating, reply_fn, "email")
 
         assert status == "replied"
-        gmail.reply_to_thread.assert_called_once()
-        reply_body = gmail.reply_to_thread.call_args.args[3]
+        reply_fn.assert_called_once()
+        reply_body = reply_fn.call_args.args[0]
         assert "come down further" in reply_body
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.state == "NEGOTIATING"
             assert thread.negotiation_rounds == 2
@@ -429,17 +427,17 @@ class TestProcessThreadNegotiation:
             extracted_quote=ExtractedQuote(price_usd=42.0),
             reasoning="Price not competitive enough",
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
         ):
-            status = _process_thread(thread_negotiating, gmail)
+            status = _process_thread(thread_negotiating, reply_fn, "email")
 
         assert status == "silence"
-        gmail.reply_to_thread.assert_not_called()
+        reply_fn.assert_not_called()
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.respond_after > datetime.now(timezone.utc)
 
@@ -450,17 +448,17 @@ class TestProcessThreadNegotiation:
             extracted_quote=ExtractedQuote(price_usd=38.0, moq=500),
             reasoning="Good final price after 3 rounds",
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
         ):
-            status = _process_thread(thread_negotiating, gmail)
+            status = _process_thread(thread_negotiating, reply_fn, "email")
 
         assert status == "closed"
-        gmail.reply_to_thread.assert_called_once()
+        reply_fn.assert_called_once()
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.state == "FINAL_PRICE_LOGGED"
 
@@ -471,15 +469,15 @@ class TestProcessThreadNegotiation:
             extracted_quote=ExtractedQuote(),
             reasoning="Supplier won't budge",
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
         ):
-            status = _process_thread(thread_negotiating, gmail)
+            status = _process_thread(thread_negotiating, reply_fn, "email")
 
         assert status == "closed"
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.state == "CLOSED"
 
@@ -489,14 +487,14 @@ class TestProcessThreadNegotiation:
             reply_text="Need better pricing.",
             extracted_quote=ExtractedQuote(),
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with patch(
             "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
         ):
-            _process_thread(thread_negotiating, gmail)
+            _process_thread(thread_negotiating, reply_fn, "email")
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             outbound = (
                 session.query(Message)
                 .filter_by(
@@ -516,16 +514,6 @@ class TestProcessThreadNegotiation:
 
 
 class TestProcessThreadEdgeCases:
-    def test_no_gmail_thread_id(self, thread_awaiting_reply):
-        with SessionLocal() as session:
-            thread = session.get(SupplierThread, thread_awaiting_reply)
-            thread.gmail_thread_id = None
-            session.commit()
-
-        gmail = _mock_gmail()
-        status = _process_thread(thread_awaiting_reply, gmail)
-        assert status == "no_gmail_thread"
-
     def test_skips_spec_check_on_later_rounds(self, thread_negotiating):
         """Threads already in NEGOTIATING skip spec check."""
         neg_result = NegotiationResult(
@@ -533,7 +521,7 @@ class TestProcessThreadEdgeCases:
             reply_text="Lower please.",
             extracted_quote=ExtractedQuote(price_usd=42.0),
         )
-        gmail = _mock_gmail()
+        reply_fn = MagicMock(return_value="gmsg_reply_out")
 
         with (
             patch(
@@ -543,7 +531,7 @@ class TestProcessThreadEdgeCases:
                 "app.pipeline.stages.s5_negotiation.negotiate", return_value=neg_result
             ),
         ):
-            _process_thread(thread_negotiating, gmail)
+            _process_thread(thread_negotiating, reply_fn, "email")
 
         mock_compare.assert_not_called()
 
@@ -572,6 +560,7 @@ class TestProcessNegotiations:
             patch(
                 "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
             ),
+            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
             patch(
                 "app.pipeline.stages.s5_negotiation.compare_products",
                 return_value=match_result,
@@ -595,19 +584,33 @@ class TestProcessNegotiations:
 
         assert counts == {}
 
+    def test_skips_thread_without_gmail_thread_id(self, thread_awaiting_reply):
+        """Email-channel threads without gmail_thread_id are skipped."""
+        with _db.SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_awaiting_reply)
+            thread.gmail_thread_id = None
+            session.commit()
+
+        gmail = _mock_gmail()
+
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
+            ),
+            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
+        ):
+            counts = process_negotiations()
+
+        assert counts.get("no_channel", 0) >= 1
+
     def test_error_in_one_thread_doesnt_stop_others(
         self, thread_awaiting_reply, thread_negotiating
     ):
-        neg_result = NegotiationResult(
-            action=NegotiationAction.REPLY,
-            reply_text="Lower.",
-            extracted_quote=ExtractedQuote(),
-        )
         gmail = _mock_gmail()
 
         call_count = 0
 
-        def failing_then_ok(tid, g):
+        def failing_then_ok(tid, reply_fn, channel):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -618,6 +621,7 @@ class TestProcessNegotiations:
             patch(
                 "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
             ),
+            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
             patch(
                 "app.pipeline.stages.s5_negotiation._process_thread",
                 side_effect=failing_then_ok,

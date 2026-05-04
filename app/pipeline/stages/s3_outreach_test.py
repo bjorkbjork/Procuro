@@ -5,9 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.integration
-
-from app.db.database import SessionLocal
+from app.db import database as _db
 from app.db.models.message import Message
 from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
@@ -28,7 +26,7 @@ TEST_URL = "https://www.kogan.com/au/buy/test-outreach/"
 
 @pytest.fixture
 def source_product():
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         sp = SourceProduct(
             url=TEST_URL,
             slug="test-outreach",
@@ -45,7 +43,7 @@ def source_product():
 
 @pytest.fixture
 def supplier_and_thread(source_product):
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         supplier = Supplier(
             name="Test Supplier",
             platform="alibaba",
@@ -131,7 +129,7 @@ class TestSendOutreach:
         mock_browser.__enter__ = MagicMock(return_value=mock_browser)
         mock_browser.__exit__ = MagicMock(return_value=False)
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             sp = session.get(SupplierProduct, thread.supplier_product_id)
             product_url = sp.product_url
 
@@ -157,7 +155,7 @@ class TestSendOutreach:
         mock_platform.login.assert_called_once()
         mock_platform.send_inquiry.assert_called_once()
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             updated = session.get(SupplierThread, thread.id)
             assert updated.state == "OUTREACH_SENT"
             msgs = session.query(Message).filter_by(thread_id=thread.id).all()
@@ -175,7 +173,7 @@ class TestSendOutreach:
         mock_browser.__enter__ = MagicMock(return_value=mock_browser)
         mock_browser.__exit__ = MagicMock(return_value=False)
 
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             sp = session.get(SupplierProduct, thread.supplier_product_id)
             product_url = sp.product_url
 
@@ -198,7 +196,7 @@ class TestSendOutreach:
             count = send_outreach()
 
         assert count == 0
-        with SessionLocal() as session:
+        with _db.SessionLocal() as session:
             updated = session.get(SupplierThread, thread.id)
             assert updated.state == "NEW"
 
