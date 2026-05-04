@@ -48,7 +48,9 @@ class SupplierThread(Base):
     )
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=False)
     state = Column(String, nullable=False, default="NEW")
+    channel = Column(String, nullable=False, default="email", server_default="email")
     gmail_thread_id = Column(String, nullable=True)
+    platform_thread_url = Column(String, nullable=True)
     respond_after = Column(DateTime(timezone=True), nullable=True)
     negotiation_rounds = Column(Integer, nullable=False, default=0)
     created_at = Column(

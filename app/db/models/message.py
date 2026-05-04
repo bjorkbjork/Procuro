@@ -26,6 +26,7 @@ class Message(Base):
     thread_id = Column(Integer, ForeignKey("supplier_threads.id"), nullable=False)
     gmail_message_id = Column(String, nullable=True, unique=True)
     direction = Column(String, nullable=False)
+    channel = Column(String, nullable=False, default="email", server_default="email")
     subject = Column(String, nullable=True)
     body = Column(Text, nullable=False)
     sent_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
