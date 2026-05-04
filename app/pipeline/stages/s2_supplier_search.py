@@ -29,7 +29,7 @@ from app.services.platforms.platform import SupplierPlatform
 
 log = logging.getLogger(__name__)
 
-MATCH_CONFIDENCE_THRESHOLD = 0.6
+MATCH_CONFIDENCE_THRESHOLD = 0.35
 MANUFACTURER_KEYWORDS = {"manufacturer", "odm", "oem", "original manufacturer"}
 
 
