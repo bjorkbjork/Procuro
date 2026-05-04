@@ -10,6 +10,7 @@ Rules:
 import logging
 
 from app.db.database import SessionLocal
+from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
 from app.services.sheets import SheetsService
 
@@ -87,4 +88,46 @@ def update_sheet() -> int:
                 )
 
     log.info("Sheet update complete: %d rows upserted", count)
+
+    try:
+        _sync_match_results(sheets)
+    except Exception:
+        log.exception("Failed to sync match results tab")
+
     return count
+
+
+def _sync_match_results(sheets: SheetsService) -> None:
+    """Write all supplier product match results to the Match Results tab."""
+    with SessionLocal() as session:
+        products = (
+            session.query(SupplierProduct)
+            .order_by(
+                SupplierProduct.source_product_id,
+                SupplierProduct.match_status.desc(),
+                SupplierProduct.match_confidence.desc(),
+            )
+            .all()
+        )
+
+        rows = []
+        for sp in products:
+            rows.append(
+                [
+                    sp.source_product.title,
+                    sp.title,
+                    sp.supplier.name,
+                    sp.platform,
+                    sp.match_status,
+                    (
+                        f"{sp.match_confidence:.2f}"
+                        if sp.match_confidence is not None
+                        else ""
+                    ),
+                    sp.match_reason or "",
+                    sp.product_url,
+                ]
+            )
+
+    sheets.sync_match_results(rows)
+    log.info("Match results tab synced: %d rows", len(rows))

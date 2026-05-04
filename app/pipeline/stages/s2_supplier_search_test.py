@@ -35,6 +35,11 @@ class TestRunSupplierSearch:
             def __exit__(self, *a):
                 pass
 
+            def get(self, model, pk):
+                m = MagicMock()
+                m.title = "Test Product"
+                return m
+
             def query(self, entity):
                 q = MagicMock()
                 idx = call_idx["n"]
@@ -68,6 +73,9 @@ class TestRunSupplierSearch:
                 mock_match,
             ),
             patch(
+                "app.pipeline.stages.s2_supplier_search._alert_low_matches",
+            ),
+            patch(
                 "app.pipeline.stages.s2_supplier_search.SessionLocal",
                 self._mock_session_factory(
                     thread_counts=[settings.MIN_MATCHES_PER_PRODUCT],
@@ -93,6 +101,9 @@ class TestRunSupplierSearch:
             patch(
                 "app.pipeline.stages.s2_supplier_search.match_candidates",
                 mock_match,
+            ),
+            patch(
+                "app.pipeline.stages.s2_supplier_search._alert_low_matches",
             ),
             patch(
                 "app.pipeline.stages.s2_supplier_search.SessionLocal",
@@ -121,6 +132,9 @@ class TestRunSupplierSearch:
                 mock_match,
             ),
             patch(
+                "app.pipeline.stages.s2_supplier_search._alert_low_matches",
+            ) as mock_alert,
+            patch(
                 "app.pipeline.stages.s2_supplier_search.SessionLocal",
                 self._mock_session_factory(
                     thread_counts=[2],
@@ -132,6 +146,7 @@ class TestRunSupplierSearch:
 
         assert mock_search.call_count == 1
         assert len(result) == 2
+        mock_alert.assert_called_once()
 
 
 SOURCE_URL = "https://www.kogan.com/au/buy/test-stage-two/"

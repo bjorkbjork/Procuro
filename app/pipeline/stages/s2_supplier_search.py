@@ -218,7 +218,7 @@ def _match_single_candidate(
 ) -> SupplierThread | None:
     """Match a single candidate against the source product. Returns a
     SupplierThread if matched, None otherwise."""
-    threading.current_thread().name = (candidate.title or "unknown")[:40]
+    threading.current_thread().name = candidate.title or "unknown"
 
     if match_all:
         is_match = True
@@ -237,7 +237,7 @@ def _match_single_candidate(
     if not is_match or confidence < MATCH_CONFIDENCE_THRESHOLD:
         log.info(
             "No match '%s': confidence=%.2f reason=%s diffs=%s",
-            candidate.title[:60],
+            candidate.title,
             confidence,
             result.reasoning,
             result.key_differences,
@@ -252,7 +252,7 @@ def _match_single_candidate(
 
     log.info(
         "Matched '%s': confidence=%.2f",
-        candidate.title[:60],
+        candidate.title,
         confidence,
     )
 
@@ -387,8 +387,39 @@ def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
         )
 
     with SessionLocal() as session:
-        return (
+        threads = (
             session.query(SupplierThread)
             .filter_by(source_product_id=source_product_id)
             .all()
         )
+        source_title = session.get(SourceProduct, source_product_id).title
+
+    if matched_count < settings.MIN_MATCHES_PER_PRODUCT:
+        _alert_low_matches(source_title, matched_count, total_candidates)
+
+    return threads
+
+
+def _alert_low_matches(source_title: str, matched: int, candidates: int) -> None:
+    """Email maintainer when a source product fails to meet the match threshold."""
+    maintainer = settings.MAINTAINER_EMAIL_ADDRESS
+    if not maintainer:
+        return
+    try:
+        from app.services.gmail import GmailService
+
+        gmail = GmailService()
+        gmail.send_email(
+            to=maintainer,
+            subject=f"[Match Anomaly] {source_title}",
+            body=(
+                f"Source product failed to reach the {settings.MIN_MATCHES_PER_PRODUCT}-match "
+                f"threshold after evaluating {candidates} candidates.\n\n"
+                f"Matched: {matched}\n"
+                f"Candidates evaluated: {candidates}\n"
+                f"Product: {source_title}\n\n"
+                "Review the Match Results tab in the output sheet for details."
+            ),
+        )
+    except Exception:
+        log.exception("Failed to send match anomaly alert")
