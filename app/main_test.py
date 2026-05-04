@@ -6,11 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from app.base.config import scheduler_settings
+from app.base.config import scheduler_settings, settings
 from app.main import (
     _fan_out,
     _run_stage,
     negotiation_pipeline,
+    recover_stalled,
     register_jobs,
     sourcing_pipeline,
 )
@@ -74,7 +75,11 @@ class TestRegisterJobs:
         with patch("app.main.scheduler", test_scheduler):
             register_jobs()
         job_ids = {job.id for job in test_scheduler.get_jobs()}
-        assert job_ids == {"sourcing_pipeline", "negotiation_pipeline"}
+        assert job_ids == {
+            "sourcing_pipeline",
+            "negotiation_pipeline",
+            "recover_stalled",
+        }
 
     def test_uses_cron_trigger(self):
         test_scheduler = BlockingScheduler()
@@ -244,3 +249,174 @@ class TestNegotiationPipeline:
             negotiation_pipeline()
 
         mock_negotiate.assert_not_called()
+
+
+class TestRecoverStalled:
+    def test_dispatches_pending_to_match(self):
+        mock_match = MagicMock(return_value=[])
+        mock_outreach = MagicMock()
+
+        with (
+            patch("app.db.database.SessionLocal") as mock_sl,
+            patch(
+                "app.pipeline.stages.s2_supplier_search.match_candidates",
+                mock_match,
+            ),
+            patch(
+                "app.pipeline.stages.s2_supplier_search.run_supplier_search",
+                MagicMock(return_value=[]),
+            ),
+            patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+        ):
+            session = MagicMock()
+            call_count = {"n": 0}
+
+            def make_query(entity):
+                call_count["n"] += 1
+                q = MagicMock()
+                if call_count["n"] == 1:
+                    # Pending: source_id=1
+                    q.filter.return_value.distinct.return_value.all.return_value = [
+                        (1,)
+                    ]
+                elif call_count["n"] == 2:
+                    # Searched sids (empty after pending excluded)
+                    q.distinct.return_value.all.return_value = []
+                else:
+                    # Stalled threads: 0
+                    q.filter.return_value.count.return_value = 0
+                return q
+
+            session.query = make_query
+            mock_sl.return_value.__enter__ = MagicMock(return_value=session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            recover_stalled()
+
+        mock_match.assert_called_once_with(1, only_pending=True)
+
+    def test_dispatches_under_matched_to_search(self):
+        mock_search = MagicMock(return_value=[])
+
+        with (
+            patch("app.db.database.SessionLocal") as mock_sl,
+            patch(
+                "app.pipeline.stages.s2_supplier_search.match_candidates",
+                MagicMock(return_value=[]),
+            ),
+            patch(
+                "app.pipeline.stages.s2_supplier_search.run_supplier_search",
+                mock_search,
+            ),
+            patch("app.pipeline.stages.s3_outreach.send_outreach", MagicMock()),
+        ):
+            session = MagicMock()
+            call_count = {"n": 0}
+
+            def make_query(entity):
+                call_count["n"] += 1
+                q = MagicMock()
+                if call_count["n"] == 1:
+                    # No pending
+                    q.filter.return_value.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # One searched source product
+                    q.distinct.return_value.all.return_value = [(42,)]
+                elif call_count["n"] == 3:
+                    # Thread count: 2 (under threshold)
+                    q.filter_by.return_value.count.return_value = 2
+                elif call_count["n"] == 4:
+                    # Candidate count: 50 (under limit)
+                    q.filter_by.return_value.count.return_value = 50
+                else:
+                    # Stalled: 0
+                    q.filter.return_value.count.return_value = 0
+                return q
+
+            session.query = make_query
+            mock_sl.return_value.__enter__ = MagicMock(return_value=session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            recover_stalled()
+
+        mock_search.assert_called_once_with(42)
+
+    def test_skips_source_at_candidate_limit(self):
+        mock_search = MagicMock(return_value=[])
+
+        with (
+            patch("app.db.database.SessionLocal") as mock_sl,
+            patch(
+                "app.pipeline.stages.s2_supplier_search.match_candidates",
+                MagicMock(return_value=[]),
+            ),
+            patch(
+                "app.pipeline.stages.s2_supplier_search.run_supplier_search",
+                mock_search,
+            ),
+            patch("app.pipeline.stages.s3_outreach.send_outreach", MagicMock()),
+        ):
+            session = MagicMock()
+            call_count = {"n": 0}
+
+            def make_query(entity):
+                call_count["n"] += 1
+                q = MagicMock()
+                if call_count["n"] == 1:
+                    q.filter.return_value.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    q.distinct.return_value.all.return_value = [(42,)]
+                elif call_count["n"] == 3:
+                    q.filter_by.return_value.count.return_value = 2
+                elif call_count["n"] == 4:
+                    q.filter_by.return_value.count.return_value = (
+                        settings.MAX_CANDIDATES_PER_PRODUCT
+                    )
+                else:
+                    q.filter.return_value.count.return_value = 0
+                return q
+
+            session.query = make_query
+            mock_sl.return_value.__enter__ = MagicMock(return_value=session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            recover_stalled()
+
+        mock_search.assert_not_called()
+
+    def test_dispatches_stalled_new_to_outreach(self):
+        mock_outreach = MagicMock()
+
+        with (
+            patch("app.db.database.SessionLocal") as mock_sl,
+            patch(
+                "app.pipeline.stages.s2_supplier_search.match_candidates",
+                MagicMock(return_value=[]),
+            ),
+            patch(
+                "app.pipeline.stages.s2_supplier_search.run_supplier_search",
+                MagicMock(return_value=[]),
+            ),
+            patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+        ):
+            session = MagicMock()
+            call_count = {"n": 0}
+
+            def make_query(entity):
+                call_count["n"] += 1
+                q = MagicMock()
+                if call_count["n"] == 1:
+                    q.filter.return_value.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    q.distinct.return_value.all.return_value = []
+                else:
+                    q.filter.return_value.count.return_value = 5
+                return q
+
+            session.query = make_query
+            mock_sl.return_value.__enter__ = MagicMock(return_value=session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+
+            recover_stalled()
+
+        mock_outreach.assert_called_once()
