@@ -33,11 +33,9 @@ jobs:
         run: uv sync --locked --extra dev
 
       - name: Run tests
-        env:
-          GMAIL_PASSWORD: test
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-        run: uv run pytest -v --tb=long --log-level=DEBUG
+        run: |
+          cp .env.example .env
+          uv run pytest -v --tb=long --log-level=DEBUG
 
   build:
     needs: test
