@@ -7,13 +7,17 @@ Flow per thread:
    - SPEC_CHECK_PASS → fall through to negotiation.
 3. Run the negotiation agent with full conversation history.
 4. Act on the result:
-   - reply  → send via Gmail, record quote, set respond_after delay, NEGOTIATING
+   - reply  → send reply, record quote, set respond_after delay, NEGOTIATING
    - silence → set respond_after delay (no reply sent)
    - close  → send final reply, record quote, FINAL_PRICE_LOGGED or CLOSED
+
+Replies are sent via a channel-agnostic reply_fn closure — _process_thread
+never knows whether it's Gmail or platform messaging.
 """
 
 import logging
 import random
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from app.pipeline.agents.match_agent import compare_products
@@ -26,10 +30,15 @@ from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.supplier_thread import SupplierThread
+from app.services.browser import BrowserSession, authenticate_platform
 from app.services.gmail import GmailService
+from app.services.platforms import get_platforms
 from app.pipeline.stages.s4_inbox_triage import _extract_sender
 
 log = logging.getLogger(__name__)
+
+# reply_fn(body) -> message_id or None
+ReplyFn = Callable[[str], str | None]
 
 # 2h–48h random delay for human-likeness (spec says 2h–2d)
 REPLY_DELAY_MIN_HOURS = 2
@@ -58,16 +67,6 @@ def _get_ready_threads() -> list[int]:
             .all()
         )
         return [t.id for t in threads]
-
-
-def _get_supplier_email(gmail: GmailService, gmail_thread_id: str) -> str | None:
-    """Extract the supplier's email from the Gmail thread."""
-    thread_data = gmail.get_thread(gmail_thread_id)
-    for msg in reversed(thread_data.get("messages", [])):
-        _, sender_email = _extract_sender(msg)
-        if sender_email and "sourcing_agent" not in sender_email:
-            return sender_email
-    return None
 
 
 def _run_spec_check(thread_id: int) -> bool:
@@ -131,22 +130,33 @@ def _record_quote(
 
 
 def _record_outbound(
-    thread_id: int, gmail_message_id: str, subject: str, body: str
+    thread_id: int, message_id: str | None, channel: str, body: str
 ) -> None:
     with SessionLocal() as session:
-        session.add(
-            Message(
-                thread_id=thread_id,
-                gmail_message_id=gmail_message_id,
-                direction="outbound",
-                subject=subject,
-                body=body,
-            )
+        msg = Message(
+            thread_id=thread_id,
+            direction="outbound",
+            channel=channel,
+            body=body,
         )
+        if channel == "email" and message_id:
+            msg.gmail_message_id = message_id
+        session.add(msg)
         session.commit()
 
 
-def _process_thread(thread_id: int, gmail: GmailService) -> str:
+def _send_and_record(
+    thread_id: int, body: str, reply_fn: ReplyFn, channel: str
+) -> bool:
+    """Send a reply via reply_fn and record it. Returns True if sent."""
+    msg_id = reply_fn(body)
+    if msg_id is not None:
+        _record_outbound(thread_id, msg_id, channel, body)
+        return True
+    return False
+
+
+def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
     """Process a single thread. Returns a status string for logging."""
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
@@ -154,7 +164,6 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
             return "not_found"
 
         state = thread.state
-        gmail_thread_id = thread.gmail_thread_id
         negotiation_rounds = thread.negotiation_rounds
         product_title = thread.source_product.title
 
@@ -168,29 +177,17 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
         for m in messages:
             session.expunge(m)
 
-    if not gmail_thread_id:
-        log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
-        return "no_gmail_thread"
-
     # First supplier reply — run spec check
     if state == "AWAITING_REPLY" and negotiation_rounds == 0:
         passed = _run_spec_check(thread_id)
         if not passed:
-            supplier_email = _get_supplier_email(gmail, gmail_thread_id)
-            if supplier_email:
-                reply = gmail.reply_to_thread(
-                    gmail_thread_id,
-                    supplier_email,
-                    "Re: Product Inquiry",
-                    "Thank you for your response. Unfortunately, the specifications "
-                    "do not match our requirements. We appreciate your time.",
-                )
-                _record_outbound(
-                    thread_id,
-                    reply.get("id", ""),
-                    "Re: Product Inquiry",
-                    "Spec check decline",
-                )
+            _send_and_record(
+                thread_id,
+                "Thank you for your response. Unfortunately, the specifications "
+                "do not match our requirements. We appreciate your time.",
+                reply_fn,
+                channel,
+            )
             with SessionLocal() as session:
                 thread = session.get(SupplierThread, thread_id)
                 thread.state = "CLOSED"
@@ -224,22 +221,9 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
     eq = result.extracted_quote
     _record_quote(thread_id, eq.price_usd, eq.moq, eq.lead_time)
 
-    supplier_email = _get_supplier_email(gmail, gmail_thread_id)
-
     if result.action == NegotiationAction.REPLY:
-        if supplier_email and result.reply_text:
-            reply = gmail.reply_to_thread(
-                gmail_thread_id,
-                supplier_email,
-                "Re: Product Inquiry",
-                result.reply_text,
-            )
-            _record_outbound(
-                thread_id,
-                reply.get("id", ""),
-                "Re: Product Inquiry",
-                result.reply_text,
-            )
+        if result.reply_text:
+            _send_and_record(thread_id, result.reply_text, reply_fn, channel)
 
         with SessionLocal() as session:
             thread = session.get(SupplierThread, thread_id)
@@ -263,19 +247,8 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
         return "silence"
 
     elif result.action == NegotiationAction.CLOSE:
-        if supplier_email and result.reply_text:
-            reply = gmail.reply_to_thread(
-                gmail_thread_id,
-                supplier_email,
-                "Re: Product Inquiry",
-                result.reply_text,
-            )
-            _record_outbound(
-                thread_id,
-                reply.get("id", ""),
-                "Re: Product Inquiry",
-                result.reply_text,
-            )
+        if result.reply_text:
+            _send_and_record(thread_id, result.reply_text, reply_fn, channel)
 
         with SessionLocal() as session:
             thread = session.get(SupplierThread, thread_id)
@@ -289,12 +262,96 @@ def _process_thread(thread_id: int, gmail: GmailService) -> str:
     return "unknown"
 
 
+# ---------------------------------------------------------------------------
+# Reply function builders
+# ---------------------------------------------------------------------------
+
+
+def _get_supplier_email(gmail: GmailService, gmail_thread_id: str) -> str | None:
+    """Extract the supplier's email from the Gmail thread."""
+    thread_data = gmail.get_thread(gmail_thread_id)
+    for msg in reversed(thread_data.get("messages", [])):
+        _, sender_email = _extract_sender(msg)
+        if sender_email and "sourcing_agent" not in sender_email:
+            return sender_email
+    return None
+
+
+def _make_email_reply_fn(gmail: GmailService, gmail_thread_id: str) -> ReplyFn:
+    """Build a reply_fn that sends via Gmail."""
+
+    def reply_fn(body: str) -> str | None:
+        supplier_email = _get_supplier_email(gmail, gmail_thread_id)
+        if not supplier_email:
+            log.warning(
+                "Could not find supplier email for Gmail thread %s", gmail_thread_id
+            )
+            return None
+        result = gmail.reply_to_thread(
+            gmail_thread_id, supplier_email, "Re: Product Inquiry", body
+        )
+        return result.get("id", "")
+
+    return reply_fn
+
+
+def _make_platform_reply_fn(
+    platform, context_id: str, conversation_url: str
+) -> ReplyFn:
+    """Build a reply_fn that sends via platform messaging.
+
+    Tries deterministic Playwright first, falls back to the LLM agent.
+    """
+    from app.pipeline.agents.platform_message_agent import (
+        ReplyStatus,
+        send_reply_via_agent,
+    )
+
+    def reply_fn(body: str) -> str | None:
+        browser = BrowserSession(
+            proxy_country="AU",
+            context_id=context_id,
+            keep_alive=True,
+        )
+        browser.__enter__()
+
+        try:
+            success = platform.send_platform_reply(browser.page, conversation_url, body)
+            browser.__exit__(None, None, None)
+            if success:
+                return f"platform_{id(body)}"
+            raise RuntimeError("Deterministic send returned False")
+        except Exception:
+            log.exception("Deterministic platform reply failed, trying agent")
+            session_id = browser.session_id
+            browser.detach()
+            try:
+                result = send_reply_via_agent(
+                    session_id,
+                    conversation_url,
+                    body,
+                    platform_prompt=platform.messaging_agent_prompt,
+                )
+                if result.status == ReplyStatus.SENT:
+                    return f"platform_{id(body)}"
+            except Exception:
+                log.exception("Agent fallback also failed for platform reply")
+            browser.release()
+            return None
+
+    return reply_fn
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+
 def process_negotiations() -> dict:
     """Process all threads ready for negotiation.
 
     Returns a summary dict with counts per outcome.
     """
-    gmail = GmailService()
     thread_ids = _get_ready_threads()
 
     if not thread_ids:
@@ -302,11 +359,51 @@ def process_negotiations() -> dict:
         return {}
 
     log.info("Processing %d threads for negotiation", len(thread_ids))
+
+    gmail = GmailService()
+    platform_objs = {p.platform.value: p for p in get_platforms()}
+    platform_contexts: dict[str, str] = {}
     counts: dict[str, int] = {}
 
     for thread_id in thread_ids:
         try:
-            status = _process_thread(thread_id, gmail)
+            with SessionLocal() as session:
+                thread = session.get(SupplierThread, thread_id)
+                channel = thread.channel or "email"
+                gmail_thread_id = thread.gmail_thread_id
+                platform_thread_url = thread.platform_thread_url
+                platform_name = thread.supplier_product.platform
+
+            if channel == "email":
+                if not gmail_thread_id:
+                    log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
+                    counts["no_channel"] = counts.get("no_channel", 0) + 1
+                    continue
+                reply_fn = _make_email_reply_fn(gmail, gmail_thread_id)
+            else:
+                if not platform_thread_url:
+                    log.warning(
+                        "Thread %d has no platform_thread_url, skipping", thread_id
+                    )
+                    counts["no_channel"] = counts.get("no_channel", 0) + 1
+                    continue
+                platform = platform_objs.get(platform_name)
+                if not platform:
+                    log.warning(
+                        "No platform for '%s', skipping thread %d",
+                        platform_name,
+                        thread_id,
+                    )
+                    counts["no_channel"] = counts.get("no_channel", 0) + 1
+                    continue
+                # Auth once per platform, reuse across threads
+                if platform_name not in platform_contexts:
+                    platform_contexts[platform_name] = authenticate_platform(platform)
+                reply_fn = _make_platform_reply_fn(
+                    platform, platform_contexts[platform_name], platform_thread_url
+                )
+
+            status = _process_thread(thread_id, reply_fn, channel)
             counts[status] = counts.get(status, 0) + 1
             log.info("Thread %d → %s", thread_id, status)
         except Exception:
