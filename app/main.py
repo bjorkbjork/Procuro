@@ -136,10 +136,6 @@ def sourcing_pipeline():
     _run_stage("3_outreach", send_outreach)
     _run_stage("6_sheet_update", update_sheet)
 
-    from app.pipeline.browser_executor import check_automation_failure_rate
-
-    check_automation_failure_rate()
-
 
 def recover_stalled():
     """Detect orphaned or stalled work across all pipeline stages and recover.
@@ -247,9 +243,14 @@ def negotiation_pipeline():
     else:
         log.info("Negotiation pipeline: no supplier replies, skipping stages 5-6")
 
-    from app.pipeline.browser_executor import check_automation_failure_rate
 
-    check_automation_failure_rate()
+def sync_reporting():
+    """Sync all reporting tabs and check for anomalies. Cheap deterministic job."""
+    from app.pipeline.browser_executor import check_automation_failure_rate
+    from app.pipeline.stages.s6_sheet_update import sync_automation_stats
+
+    _run_stage("sync_automation_stats", sync_automation_stats)
+    _run_stage("check_failure_rate", check_automation_failure_rate)
 
 
 def register_jobs():
@@ -280,6 +281,14 @@ def register_jobs():
         trigger="cron",
         minute=f"*/{sourcing_minutes}",
         id="recover_stalled",
+        replace_existing=True,
+        next_run_time=now,
+    )
+    scheduler.add_job(
+        sync_reporting,
+        trigger="cron",
+        minute="*/30",
+        id="sync_reporting",
         replace_existing=True,
         next_run_time=now,
     )

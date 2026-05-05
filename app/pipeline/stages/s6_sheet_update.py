@@ -97,11 +97,6 @@ def update_sheet() -> int:
     except Exception:
         log.exception("Failed to sync match results tab")
 
-    try:
-        _sync_automation_stats(sheets)
-    except Exception:
-        log.exception("Failed to sync automation stats tab")
-
     return count
 
 
@@ -141,8 +136,9 @@ def _sync_match_results(sheets: SheetsService) -> None:
     log.info("Match results tab synced: %d rows", len(rows))
 
 
-def _sync_automation_stats(sheets: SheetsService) -> None:
-    """Write automation event stats aggregated by (stage, action, outcome)."""
+def sync_automation_stats() -> None:
+    """Write automation event stats to the Automation Stats sheet tab."""
+    sheets = SheetsService()
     with SessionLocal() as session:
         results = (
             session.query(

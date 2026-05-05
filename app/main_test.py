@@ -79,6 +79,7 @@ class TestRegisterJobs:
             "sourcing_pipeline",
             "negotiation_pipeline",
             "recover_stalled",
+            "sync_reporting",
         }
 
     def test_uses_cron_trigger(self):
