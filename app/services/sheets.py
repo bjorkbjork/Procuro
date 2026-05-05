@@ -57,6 +57,56 @@ AUTOMATION_STATS_HEADERS = [
     "Latest",
 ]
 
+DASHBOARD_TAB = "Dashboard"
+DASHBOARD_HEADERS = ["Section", "Metric", "Value", "Notes"]
+
+ACTIVE_THREADS_TAB = "Active Threads"
+ACTIVE_THREADS_HEADERS = [
+    "Thread ID",
+    "Product",
+    "Source URL",
+    "Supplier",
+    "Platform",
+    "Channel",
+    "State",
+    "Days Since Outreach",
+    "Messages Sent",
+    "Messages Received",
+    "Quotes Received",
+    "Latest Quote USD",
+    "Best Quote USD",
+    "Negotiation Rounds",
+    "Respond After",
+    "Link",
+]
+
+PRODUCTS_PIPELINE_TAB = "Products Pipeline"
+PRODUCTS_PIPELINE_HEADERS = [
+    "Product",
+    "Source URL",
+    "Candidates Found",
+    "Matched",
+    "Rejected",
+    "Pending",
+    "Active Threads",
+    "Threads with Quote",
+    "Best Quote USD",
+    "Input Status",
+]
+
+THREAD_ACTIVITY_TAB = "Thread Activity"
+THREAD_ACTIVITY_HEADERS = [
+    "Timestamp",
+    "Stage",
+    "Action",
+    "Outcome",
+    "Thread ID",
+    "Product",
+    "Supplier",
+    "Channel",
+    "Detail",
+]
+
 
 class SheetsService:
     def __init__(self):
@@ -177,18 +227,13 @@ class SheetsService:
                 body={"values": [headers]},
             ).execute()
 
-    def sync_match_results(self, rows: list[list[str]]) -> None:
-        """Overwrite the Match Results tab with the given rows (full replace)."""
-        tab = MATCH_RESULTS_TAB
-        self._ensure_tab(tab, MATCH_RESULTS_HEADERS)
-        last_col = chr(64 + len(MATCH_RESULTS_HEADERS))
-
-        # Clear existing data below header
+    def _sync_full_tab(self, tab: str, headers: list[str], rows: list[list]) -> None:
+        self._ensure_tab(tab, headers)
+        last_col = chr(64 + len(headers))
         self.service.spreadsheets().values().clear(
             spreadsheetId=self.spreadsheet_id,
             range=f"{tab}!A2:{last_col}",
         ).execute()
-
         if rows:
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
@@ -196,25 +241,24 @@ class SheetsService:
                 valueInputOption="RAW",
                 body={"values": rows},
             ).execute()
+
+    def sync_match_results(self, rows: list[list[str]]) -> None:
+        self._sync_full_tab(MATCH_RESULTS_TAB, MATCH_RESULTS_HEADERS, rows)
 
     def sync_automation_stats(self, rows: list[list[str]]) -> None:
-        """Overwrite the Automation Stats tab with the given rows (full replace)."""
-        tab = AUTOMATION_STATS_TAB
-        self._ensure_tab(tab, AUTOMATION_STATS_HEADERS)
-        last_col = chr(64 + len(AUTOMATION_STATS_HEADERS))
+        self._sync_full_tab(AUTOMATION_STATS_TAB, AUTOMATION_STATS_HEADERS, rows)
 
-        self.service.spreadsheets().values().clear(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{tab}!A2:{last_col}",
-        ).execute()
+    def sync_dashboard(self, rows: list[list]) -> None:
+        self._sync_full_tab(DASHBOARD_TAB, DASHBOARD_HEADERS, rows)
 
-        if rows:
-            self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{tab}!A2:{last_col}{len(rows) + 1}",
-                valueInputOption="RAW",
-                body={"values": rows},
-            ).execute()
+    def sync_active_threads(self, rows: list[list]) -> None:
+        self._sync_full_tab(ACTIVE_THREADS_TAB, ACTIVE_THREADS_HEADERS, rows)
+
+    def sync_products_pipeline(self, rows: list[list]) -> None:
+        self._sync_full_tab(PRODUCTS_PIPELINE_TAB, PRODUCTS_PIPELINE_HEADERS, rows)
+
+    def sync_thread_activity(self, rows: list[list]) -> None:
+        self._sync_full_tab(THREAD_ACTIVITY_TAB, THREAD_ACTIVITY_HEADERS, rows)
 
     def delete_output_row(self, slug: str, supplier_name: str) -> None:
         idx = self._find_output_row(slug, supplier_name)

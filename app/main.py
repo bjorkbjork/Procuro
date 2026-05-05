@@ -247,9 +247,19 @@ def negotiation_pipeline():
 def sync_reporting():
     """Sync all reporting tabs and check for anomalies. Cheap deterministic job."""
     from app.pipeline.browser_executor import check_automation_failure_rate
-    from app.pipeline.stages.s6_sheet_update import sync_automation_stats
+    from app.pipeline.stages.s6_sheet_update import (
+        sync_active_threads,
+        sync_automation_stats,
+        sync_dashboard,
+        sync_products_pipeline,
+        sync_thread_activity,
+    )
 
     _run_stage("sync_automation_stats", sync_automation_stats)
+    _run_stage("sync_dashboard", sync_dashboard)
+    _run_stage("sync_active_threads", sync_active_threads)
+    _run_stage("sync_products_pipeline", sync_products_pipeline)
+    _run_stage("sync_thread_activity", sync_thread_activity)
     _run_stage("check_failure_rate", check_automation_failure_rate)
 
 
