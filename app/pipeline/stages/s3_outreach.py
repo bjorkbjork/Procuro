@@ -154,7 +154,9 @@ def _create_agent_session(context_id: str) -> str:
         project_id=browserbase_settings.BROWSERBASE_PROJECT_ID,
         keep_alive=True,
         region="ap-southeast-1",
-        proxies=[{"type": "browserbase", "geolocation": {"country": "AU"}}],
+        proxies=[
+            {"type": "browserbase", "geolocation": {"country": "AU", "city": "SYDNEY"}}
+        ],
         browser_settings={
             "context": {"id": context_id, "persist": False},
         },

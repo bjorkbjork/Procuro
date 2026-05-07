@@ -20,10 +20,11 @@ from typing import Any
 
 import stamina
 from browserbase import Browserbase
-from pydantic import BaseModel
-from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
-from pydantic_ai.messages import BinaryContent, ModelMessage
 from playwright.sync_api import Browser, Page, Response, sync_playwright
+from pydantic import BaseModel
+from pydantic_ai import Agent as _BaseAgent
+from pydantic_ai import ModelRetry, Tool
+from pydantic_ai.messages import BinaryContent, ModelMessage
 
 from app.base.config import PROJECT_ROOT, browserbase_settings, model_settings
 from app.base.llm import EVICTION_DIR, get_model
@@ -67,8 +68,10 @@ class BrowserSession:
         keep_alive: bool = False,
         context_id: str | None = None,
         persist_context: bool = False,
+        proxy_city: str | None = None,
     ):
         self._proxy_country = proxy_country
+        self._proxy_city = proxy_city
         self._keep_alive = keep_alive
         self._context_id = context_id
         self._persist_context = persist_context
@@ -103,8 +106,13 @@ class BrowserSession:
     def __enter__(self) -> "BrowserSession":
         proxies = None
         if self._proxy_country:
+            # {} unwraps to nothing, but None throws an error. Go figure
+            proxy_city = {"city": self._proxy_city} if self._proxy_city else {}
             proxies = [
-                {"type": "browserbase", "geolocation": {"country": self._proxy_country}}
+                {
+                    "type": "browserbase",
+                    "geolocation": {**proxy_city, "country": self._proxy_country},
+                }
             ]
 
         create_kwargs = {
@@ -182,6 +190,7 @@ def authenticate_platform(platform) -> str:
     try:
         with BrowserSession(
             proxy_country="AU",
+            proxy_city="SYDNEY",
             context_id=context_id,
             persist_context=True,
         ) as browser:

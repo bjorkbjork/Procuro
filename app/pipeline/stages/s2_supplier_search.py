@@ -109,7 +109,7 @@ def _fetch_and_save_offer(
 
     log.info("Fetching specs from %s", product_url)
     try:
-        with BrowserSession(proxy_country="AU") as browser:
+        with BrowserSession(proxy_country="AU", proxy_city="SYDNEY") as browser:
             details = _fetch_product_specs(browser.page, platform, product_url)
     except Exception:
         log.exception("Failed to fetch specs from %s", product_url)

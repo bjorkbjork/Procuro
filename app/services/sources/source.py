@@ -7,6 +7,7 @@ from typing import Protocol
 class MarketplaceSource(Protocol):
     name: str
     proxy_country: str | None
+    proxy_city: str | None
     spec_selector: str | None
 
     def parse_title(self, html: str) -> str: ...

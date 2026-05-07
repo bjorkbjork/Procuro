@@ -219,10 +219,49 @@ class TestBrowserFallbackExecutor:
         with patches[0], patches[1], patches[2], patches[3]:
             results = executor.execute()
 
-        # 1 pool attempt + up to REAUTH_MAX_RETRIES (5) re-auth retries
+        # 1 initial attempt + up to REAUTH_MAX_RETRIES re-auth retries
         from app.base.config import settings
 
         assert call_count["det"] == 1 + settings.REAUTH_MAX_RETRIES
+
+    def test_multiple_items_get_separate_auth(self):
+        """Each batch authenticates independently — 3 items with MAX_WORKERS=3
+        should produce 3 separate authenticate_platform calls."""
+        mock_browser = _mock_browser()
+        mock_platform = MagicMock()
+        mock_platform.platform.value = "alibaba"
+
+        ctx_ids = iter(["ctx-0", "ctx-1", "ctx-2"])
+        mock_auth = MagicMock(side_effect=lambda _plat: next(ctx_ids))
+
+        received_contexts = []
+
+        def det_fn(item, page, plat, ctx):
+            received_contexts.append(ctx)
+            return "ok"
+
+        executor = StubExecutor(["a", "b", "c"], det_fn=det_fn)
+
+        with (
+            patch(
+                "app.pipeline.browser_executor.BrowserSession",
+                return_value=mock_browser,
+            ),
+            patch(
+                "app.pipeline.browser_executor.authenticate_platform",
+                mock_auth,
+            ),
+            patch(
+                "app.pipeline.browser_executor.get_platforms",
+                return_value=[mock_platform],
+            ),
+            patch("app.pipeline.browser_executor.bb"),
+        ):
+            results = executor.execute()
+
+        assert mock_auth.call_count == 3
+        assert len(results) == 3
+        assert set(received_contexts) == {"ctx-0", "ctx-1", "ctx-2"}
 
 
 class TestRunWithBrowserFallback:
