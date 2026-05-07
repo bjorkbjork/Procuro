@@ -117,6 +117,7 @@ class SchedulerSettings(BaseSettings):
     SOURCING_INTERVAL_MINUTES: int = 15
     NEGOTIATION_INTERVAL_MINUTES: int = 30
     STALLED_OUTREACH_MINUTES: int = 60
+    MAX_SEARCH_ATTEMPTS: int = 5
 
 
 settings = Settings()
