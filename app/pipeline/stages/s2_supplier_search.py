@@ -342,9 +342,10 @@ def match_candidates(
 def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
     """Full Stage 2 pipeline: search, extract, match — retry with new queries
     until the minimum match threshold is met or the candidate limit is reached."""
-    attempt = 0
-    while True:
-        attempt += 1
+    from app.base.config import scheduler_settings
+
+    max_attempts = scheduler_settings.MAX_SEARCH_ATTEMPTS
+    for attempt in range(1, max_attempts + 1):
         search_and_extract(source_product_id)
         match_candidates(source_product_id, only_pending=True)
 
@@ -375,6 +376,16 @@ def run_supplier_search(source_product_id: int) -> list[SupplierThread]:
                 total_candidates,
                 matched_count,
                 settings.MIN_MATCHES_PER_PRODUCT,
+            )
+            break
+
+        if attempt == max_attempts:
+            log.warning(
+                "Reached max %d search attempts with %d/%d matches (%d candidates) — stopping",
+                max_attempts,
+                matched_count,
+                settings.MIN_MATCHES_PER_PRODUCT,
+                total_candidates,
             )
             break
 

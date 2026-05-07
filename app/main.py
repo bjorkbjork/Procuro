@@ -21,6 +21,8 @@ from app.base.scheduler import scheduler
 
 log = logging.getLogger(__name__)
 
+_pipeline_lock = threading.Lock()
+
 
 def _run_stage(stage_name: str, func, *args, **kwargs):
     log.info("Stage %s: starting", stage_name)
@@ -83,6 +85,17 @@ def _fan_out(stage_name: str, func, items, *, max_workers=None, label=None):
 
 
 def sourcing_pipeline():
+    if not _pipeline_lock.acquire(blocking=False):
+        log.info("Sourcing pipeline: skipped — previous run still in progress")
+        return
+
+    try:
+        _sourcing_pipeline_inner()
+    finally:
+        _pipeline_lock.release()
+
+
+def _sourcing_pipeline_inner():
     from app.pipeline.triggers.input_sheet import get_new_urls
     from app.pipeline.stages.s1_spec_extraction import extract_specs
     from app.pipeline.stages.s2_supplier_search import run_supplier_search
@@ -145,6 +158,17 @@ def recover_stalled():
     2. source_products under match threshold → re-run full search loop (stage 2)
     3. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
+    if not _pipeline_lock.acquire(blocking=False):
+        log.info("Recovery: skipped — sourcing pipeline still in progress")
+        return
+
+    try:
+        _recover_stalled_inner()
+    finally:
+        _pipeline_lock.release()
+
+
+def _recover_stalled_inner():
     from datetime import datetime, timezone, timedelta
 
     from app.db.database import SessionLocal
@@ -274,6 +298,7 @@ def register_jobs():
         minute=f"*/{sourcing_minutes}",
         id="sourcing_pipeline",
         replace_existing=True,
+        max_instances=1,
         next_run_time=now,
     )
     scheduler.add_job(
@@ -285,6 +310,7 @@ def register_jobs():
         timezone="Australia/Sydney",
         id="negotiation_pipeline",
         replace_existing=True,
+        max_instances=1,
     )
     scheduler.add_job(
         recover_stalled,
@@ -292,6 +318,7 @@ def register_jobs():
         minute=f"*/{sourcing_minutes}",
         id="recover_stalled",
         replace_existing=True,
+        max_instances=1,
         next_run_time=now,
     )
     scheduler.add_job(
@@ -300,6 +327,7 @@ def register_jobs():
         minute="*/30",
         id="sync_reporting",
         replace_existing=True,
+        max_instances=1,
         next_run_time=now,
     )
     log.info(
