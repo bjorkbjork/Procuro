@@ -158,14 +158,8 @@ def recover_stalled():
     2. source_products under match threshold → re-run full search loop (stage 2)
     3. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
-    if not _pipeline_lock.acquire(blocking=False):
-        log.info("Recovery: skipped — sourcing pipeline still in progress")
-        return
-
-    try:
+    with _pipeline_lock:
         _recover_stalled_inner()
-    finally:
-        _pipeline_lock.release()
 
 
 def _recover_stalled_inner():
