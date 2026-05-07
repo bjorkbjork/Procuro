@@ -21,11 +21,11 @@ from pathlib import Path
 from typing import Any
 
 import boto3
+from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import BinaryContent
 from pydantic_ai.models import ModelRequestParameters, ModelSettings, StreamedResponse
 from botocore.config import Config
-from pydantic_ai import Agent as _BaseAgent, ModelRetry, Tool
 from dataclasses import replace as dc_replace
 from pydantic_ai.messages import (
     ModelMessage,
