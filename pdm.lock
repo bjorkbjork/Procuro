@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform"]
 lock_version = "4.5.0"
-content_hash = "sha256:5f36404f86dcf1433d25ad44a6fbfcce3dd4132236a60f7da49f110aee3692d5"
+content_hash = "sha256:b00aff54a3c411ba839d2a38b1f41b847aa876e8a0a0a394adf7c115ddf03718"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -147,7 +147,7 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.98.1"
+version = "0.100.0"
 summary = ""
 dependencies = [
     "anyio",
@@ -160,8 +160,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "anthropic-0.98.1-py3-none-any.whl", hash = "sha256:107ebf954415382fdcea6a94f9cf334a53199ad64794403590dc55366cefcc28"},
-    {file = "anthropic-0.98.1.tar.gz", hash = "sha256:62205edec42f5877df63d58be8e9443843d3e032215836e228fba1f59514a433"},
+    {file = "anthropic-0.100.0-py3-none-any.whl", hash = "sha256:1c15769efa15d8fd5c1ebf900e25c57e3ee540f8554a29aa56e4edefffe2951d"},
+    {file = "anthropic-0.100.0.tar.gz", hash = "sha256:650dee9e023afb16395939ee4104bbc21f966b380210119fb91122c12099c79a"},
 ]
 
 [[package]]
@@ -209,15 +209,15 @@ files = [
 
 [[package]]
 name = "authlib"
-version = "1.7.1"
+version = "1.7.2"
 summary = ""
 dependencies = [
     "cryptography",
     "joserfc",
 ]
 files = [
-    {file = "authlib-1.7.1-py2.py3-none-any.whl", hash = "sha256:8470f4aa6b5590ac41bd81d6e6ee12448ce36a0da0af19bbed69fb53fb4e8ad9"},
-    {file = "authlib-1.7.1.tar.gz", hash = "sha256:8c09b0f9d080c823e594b52316af70f79a1fa4eed64d0363a076233c04ef063a"},
+    {file = "authlib-1.7.2-py2.py3-none-any.whl", hash = "sha256:3e1faedc9d87e7d56a164eca3ccb6ace0d61b94abe83e92242f8dc8bba9b4a9f"},
+    {file = "authlib-1.7.2.tar.gz", hash = "sha256:2cea25fefcd4e7173bdf1372c0afc265c8034b23a8cd5dcb6a9164b826c64231"},
 ]
 
 [[package]]
@@ -266,7 +266,7 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.43.3"
+version = "1.43.5"
 summary = ""
 dependencies = [
     "botocore",
@@ -274,13 +274,13 @@ dependencies = [
     "s3transfer",
 ]
 files = [
-    {file = "boto3-1.43.3-py3-none-any.whl", hash = "sha256:fb9fe51849ef2a78198d582756fc06f14f7de27f73e0fa90275d6aa4171eb4d0"},
-    {file = "boto3-1.43.3.tar.gz", hash = "sha256:7c7777862ffc898f05efa566032bbabfe226dbb810e35ec11125817f128bc5c5"},
+    {file = "boto3-1.43.5-py3-none-any.whl", hash = "sha256:aa8a296c8db55d812767b282cfe4c7977f0b0eeaa709abdaeb368b9c738e901f"},
+    {file = "boto3-1.43.5.tar.gz", hash = "sha256:414be7868f25c3b6a0232301c8ab40347911b6b191926b61f00a63f89b97b2bc"},
 ]
 
 [[package]]
 name = "botocore"
-version = "1.43.3"
+version = "1.43.5"
 summary = ""
 dependencies = [
     "jmespath",
@@ -288,8 +288,8 @@ dependencies = [
     "urllib3",
 ]
 files = [
-    {file = "botocore-1.43.3-py3-none-any.whl", hash = "sha256:ec0769eb0f7c5034856bb406a92698dbc02a3d4be0f78a384747106b161d8ea3"},
-    {file = "botocore-1.43.3.tar.gz", hash = "sha256:eac6da0fffccf87888ebf4d89f0b2378218a707efa748cd955b838995e944695"},
+    {file = "botocore-1.43.5-py3-none-any.whl", hash = "sha256:a1df6e0c6346735936f42e6b99f3b28f1e9397731c0bc2563c617df7965a0dc0"},
+    {file = "botocore-1.43.5.tar.gz", hash = "sha256:5c7207816ab5e48382adcb2a64db388fa4abe9ee1d23f72c82ae62c51a0bc84e"},
 ]
 
 [[package]]
@@ -707,7 +707,7 @@ files = [
 
 [[package]]
 name = "google-api-python-client"
-version = "2.195.0"
+version = "2.196.0"
 summary = ""
 dependencies = [
     "google-api-core",
@@ -717,8 +717,8 @@ dependencies = [
     "uritemplate",
 ]
 files = [
-    {file = "google_api_python_client-2.195.0-py3-none-any.whl", hash = "sha256:753e62057f23049a89534bea0162b60fe391b85fb86d80bcdf884d05ec91c5bf"},
-    {file = "google_api_python_client-2.195.0.tar.gz", hash = "sha256:c72cf2661c3addf01c880ce60541e83e1df354644b874f7f9d8d5ed2070446ae"},
+    {file = "google_api_python_client-2.196.0-py3-none-any.whl", hash = "sha256:2591e9b47dcb17e4e62a09370aaee3bcf323af8f28ccecdabcd0a42a23ca4db5"},
+    {file = "google_api_python_client-2.196.0.tar.gz", hash = "sha256:9f335d38f6caaa2747bcf64335ed1a9a19047d53e86538eda6a1b17d37f1743d"},
 ]
 
 [[package]]
@@ -883,18 +883,18 @@ files = [
 
 [[package]]
 name = "hf-xet"
-version = "1.4.3"
+version = "1.5.0"
 summary = ""
 files = [
-    {file = "hf_xet-1.4.3-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:d0da85329eaf196e03e90b84c2d0aca53bd4573d097a75f99609e80775f98025"},
-    {file = "hf_xet-1.4.3-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:e23717ce4186b265f69afa66e6f0069fe7efbf331546f5c313d00e123dc84583"},
-    {file = "hf_xet-1.4.3-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:fc360b70c815bf340ed56c7b8c63aacf11762a4b099b2fe2c9bd6d6068668c08"},
-    {file = "hf_xet-1.4.3-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:39f2d2e9654cd9b4319885733993807aab6de9dfbd34c42f0b78338d6617421f"},
-    {file = "hf_xet-1.4.3-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:49ad8a8cead2b56051aa84d7fce3e1335efe68df3cf6c058f22a65513885baac"},
-    {file = "hf_xet-1.4.3-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:7716d62015477a70ea272d2d68cd7cad140f61c52ee452e133e139abfe2c17ba"},
-    {file = "hf_xet-1.4.3-cp37-abi3-win_amd64.whl", hash = "sha256:6b591fcad34e272a5b02607485e4f2a1334aebf1bc6d16ce8eb1eb8978ac2021"},
-    {file = "hf_xet-1.4.3-cp37-abi3-win_arm64.whl", hash = "sha256:7c2c7e20bcfcc946dc67187c203463f5e932e395845d098cc2a93f5b67ca0b47"},
-    {file = "hf_xet-1.4.3.tar.gz", hash = "sha256:8ddedb73c8c08928c793df2f3401ec26f95be7f7e516a7bee2fbb546f6676113"},
+    {file = "hf_xet-1.5.0-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:dad0dc84e941b8ba3c860659fe1fdc35c049d47cce293f003287757e971a8f56"},
+    {file = "hf_xet-1.5.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:fd6e5a9b0fdac4ed03ed45ef79254a655b1aaab514a02202617fbf643f5fdf7a"},
+    {file = "hf_xet-1.5.0-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:3531b1823a0e6d77d80f9ed15ca0e00f0d115094f8ac033d5cae88f4564cc949"},
+    {file = "hf_xet-1.5.0-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:9a0ee58cd18d5ea799f7ed11290bbccbe56bdd8b1d97ca74b9cc49a3945d7a3b"},
+    {file = "hf_xet-1.5.0-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:1e60df5a42e9bed8628b6416af2cba4cba57ae9f02de226a06b020d98e1aab18"},
+    {file = "hf_xet-1.5.0-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:4b35549ce62601b84da4ff9b24d970032ace3d4430f52d91bcbb26c901d6c690"},
+    {file = "hf_xet-1.5.0-cp37-abi3-win_amd64.whl", hash = "sha256:2806c7c17b4d23f8d88f7c4814f838c3b6150773fe339c20af23e1cfaf2797e4"},
+    {file = "hf_xet-1.5.0-cp37-abi3-win_arm64.whl", hash = "sha256:b6c9df403040248c76d808d3e047d64db2d923bae593eb244c41e425cf6cd7be"},
+    {file = "hf_xet-1.5.0.tar.gz", hash = "sha256:e0fb0a34d9f406eed88233e829a67ec016bec5af19e480eac65a233ea289a948"},
 ]
 
 [[package]]
@@ -948,7 +948,7 @@ files = [
 
 [[package]]
 name = "huggingface-hub"
-version = "1.13.0"
+version = "1.14.0"
 summary = ""
 dependencies = [
     "filelock",
@@ -962,8 +962,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "huggingface_hub-1.13.0-py3-none-any.whl", hash = "sha256:e942cb50d6a08dd5306688b1ac05bda157fd2fcc88b63dae405f7bd0d3234005"},
-    {file = "huggingface_hub-1.13.0.tar.gz", hash = "sha256:f6df2dac5abe82ce2fe05873d10d5ff47bc677d616a2f521f4ee26db9415d9d0"},
+    {file = "huggingface_hub-1.14.0-py3-none-any.whl", hash = "sha256:efe075535c62e130b30e836b138e13785f6f043d1f0539e0a39aa411a99e90b8"},
+    {file = "huggingface_hub-1.14.0.tar.gz", hash = "sha256:d6d2c9cd6be1d02ae9ec6672d5587d10a427f377db688e82528f426a041622c2"},
 ]
 
 [[package]]
@@ -1075,23 +1075,23 @@ files = [
 
 [[package]]
 name = "joserfc"
-version = "1.6.4"
+version = "1.6.5"
 summary = ""
 dependencies = [
     "cryptography",
 ]
 files = [
-    {file = "joserfc-1.6.4-py3-none-any.whl", hash = "sha256:3e4a22b509b41908989237a045e25c8308d5fd47ab96bdae2dd8057c6451003a"},
-    {file = "joserfc-1.6.4.tar.gz", hash = "sha256:34ce5f499bfcc5e9ad4cc75077f9278ab3227b71da9aaf28f9ab705f8a560d3c"},
+    {file = "joserfc-1.6.5-py3-none-any.whl", hash = "sha256:e9878a0f8243fe7b95e11fdda81374ca9f7a689e302751579d3dfdeec559675e"},
+    {file = "joserfc-1.6.5.tar.gz", hash = "sha256:1482a7db78fb4602e44ed89e51b599d052e091288c7c532c5b694e20149dec48"},
 ]
 
 [[package]]
 name = "jsonpath-python"
-version = "1.1.5"
+version = "1.1.6"
 summary = ""
 files = [
-    {file = "jsonpath_python-1.1.5-py3-none-any.whl", hash = "sha256:a60315404d70a65e76c9a782c84e50600480221d94a58af47b7b4d437351cb4b"},
-    {file = "jsonpath_python-1.1.5.tar.gz", hash = "sha256:ceea2efd9e56add09330a2c9631ea3d55297b9619348c1055e5bfb9cb0b8c538"},
+    {file = "jsonpath_python-1.1.6-py3-none-any.whl", hash = "sha256:a1c50afd8d3fbbaf47a4873bc890dcb3c15da96f5c020327977d844d8731a2d4"},
+    {file = "jsonpath_python-1.1.6.tar.gz", hash = "sha256:dded9932b4ec41fb8726e09c83afa4e6be618f938c2db287cc2a81723c639671"},
 ]
 
 [[package]]
@@ -1216,14 +1216,14 @@ files = [
 
 [[package]]
 name = "markdown-it-py"
-version = "4.0.0"
+version = "4.1.0"
 summary = ""
 dependencies = [
     "mdurl",
 ]
 files = [
-    {file = "markdown_it_py-4.0.0-py3-none-any.whl", hash = "sha256:87327c59b172c5011896038353a81343b6754500a08cd7a4973bb48c6d578147"},
-    {file = "markdown_it_py-4.0.0.tar.gz", hash = "sha256:cb0a2b4aa34f932c007117b194e945bd74e0ec24133ceb5bac59009cda1cb9f3"},
+    {file = "markdown_it_py-4.1.0-py3-none-any.whl", hash = "sha256:d4939a62a2dd0cd9cb80a191a711ba1d39bac8ed5ef9e9966895b0171c01c46d"},
+    {file = "markdown_it_py-4.1.0.tar.gz", hash = "sha256:760e3f87b2787c044c5138a5ba107b7c2be26c03b13cc7f8fe42756b65b1df6c"},
 ]
 
 [[package]]
@@ -1366,7 +1366,7 @@ files = [
 
 [[package]]
 name = "openai"
-version = "2.34.0"
+version = "2.35.1"
 summary = ""
 dependencies = [
     "anyio",
@@ -1379,8 +1379,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "openai-2.34.0-py3-none-any.whl", hash = "sha256:c996a71b1a210f3569844572ad4c609307e978515fb76877cf449b72596e549e"},
-    {file = "openai-2.34.0.tar.gz", hash = "sha256:828b4efcbb126352c2b5eb97d33ae890c92a71ab72511aefc1b7fe64aeccb07b"},
+    {file = "openai-2.35.1-py3-none-any.whl", hash = "sha256:38ff2e0394dbf56c3d39151c2aa05f3264223b6a76be2a499e87b466017a1263"},
+    {file = "openai-2.35.1.tar.gz", hash = "sha256:ae61ad96c514295476c42fbd61d1f84b2060bc6dd8e4e4a7d85273f089614ce4"},
 ]
 
 [[package]]
@@ -1764,7 +1764,7 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.13.3"
+version = "2.13.4"
 summary = ""
 dependencies = [
     "annotated-types",
@@ -1773,25 +1773,25 @@ dependencies = [
     "typing-inspection",
 ]
 files = [
-    {file = "pydantic-2.13.3-py3-none-any.whl", hash = "sha256:6db14ac8dfc9a1e57f87ea2c0de670c251240f43cb0c30a5130e9720dc612927"},
-    {file = "pydantic-2.13.3.tar.gz", hash = "sha256:af09e9d1d09f4e7fe37145c1f577e1d61ceb9a41924bf0094a36506285d0a84d"},
+    {file = "pydantic-2.13.4-py3-none-any.whl", hash = "sha256:45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba"},
+    {file = "pydantic-2.13.4.tar.gz", hash = "sha256:c40756b57adaa8b1efeeced5c196f3f3b7c435f90e84ea7f443901bec8099ef6"},
 ]
 
 [[package]]
 name = "pydantic-ai"
-version = "1.90.0"
+version = "1.89.1"
 summary = ""
 dependencies = [
     "pydantic-ai-slim[ag-ui,anthropic,bedrock,cli,cohere,evals,fastmcp,google,groq,huggingface,logfire,mcp,mistral,openai,retries,spec,temporal,ui,vertexai,xai]",
 ]
 files = [
-    {file = "pydantic_ai-1.90.0-py3-none-any.whl", hash = "sha256:530985297ef5aada9c4480fd416f457a21cc19d6caed88c7652c85da620b6952"},
-    {file = "pydantic_ai-1.90.0.tar.gz", hash = "sha256:9c00884d5fc46df4ec8a7f393c9aae4936948ca0ea72e7f8fbc5c704b8af5516"},
+    {file = "pydantic_ai-1.89.1-py3-none-any.whl", hash = "sha256:995e5edc068c232729ec4c5246e9e9ede1d34eea5ee8acbaa7ca9560f731f43a"},
+    {file = "pydantic_ai-1.89.1.tar.gz", hash = "sha256:abed9da5c265565f7e1163ebb6626451c6cce3a832624706c6bbe2900d1a2c75"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 summary = ""
 dependencies = [
     "genai-prices",
@@ -1803,331 +1803,331 @@ dependencies = [
     "typing-inspection",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["ag-ui"]
 summary = ""
 dependencies = [
     "ag-ui-protocol",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "starlette",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["anthropic"]
 summary = ""
 dependencies = [
     "anthropic",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["bedrock"]
 summary = ""
 dependencies = [
     "boto3",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["cli"]
 summary = ""
 dependencies = [
     "argcomplete",
     "prompt-toolkit",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "pyperclip",
     "pyyaml",
     "rich",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["cohere"]
 summary = ""
 dependencies = [
     "cohere; sys_platform != \"emscripten\"",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["evals"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "pydantic-evals",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["fastmcp"]
 summary = ""
 dependencies = [
     "fastmcp",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["google"]
 summary = ""
 dependencies = [
     "google-genai",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["groq"]
 summary = ""
 dependencies = [
     "groq",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["huggingface"]
 summary = ""
 dependencies = [
     "huggingface-hub",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["logfire"]
 summary = ""
 dependencies = [
     "logfire[httpx]",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["mcp"]
 summary = ""
 dependencies = [
     "mcp",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["mistral"]
 summary = ""
 dependencies = [
     "mistralai",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["openai"]
 summary = ""
 dependencies = [
     "openai",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "tiktoken",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["retries"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "tenacity",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["spec"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "pydantic-handlebars",
     "pyyaml",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["temporal"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "temporalio",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["ui"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "starlette",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["vertexai"]
 summary = ""
 dependencies = [
     "google-auth",
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "requests",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "1.90.0"
+version = "1.89.1"
 extras = ["xai"]
 summary = ""
 dependencies = [
-    "pydantic-ai-slim==1.90.0",
+    "pydantic-ai-slim==1.89.1",
     "xai-sdk",
 ]
 files = [
-    {file = "pydantic_ai_slim-1.90.0-py3-none-any.whl", hash = "sha256:4916258f5a422e5aace4cc5285fa55e7cc332939109594f2c1ff9a5f59be4104"},
-    {file = "pydantic_ai_slim-1.90.0.tar.gz", hash = "sha256:39e6c8eca29436a6aa9a7440852cb80081ebd54d49b91a1dfbc18dd4a6da77a0"},
+    {file = "pydantic_ai_slim-1.89.1-py3-none-any.whl", hash = "sha256:9e7d615a0a3e48993d067901e596e85708e9c8d1f6bef96c20c340385028d465"},
+    {file = "pydantic_ai_slim-1.89.1.tar.gz", hash = "sha256:3ed967bff8dec992a907c1d1dabab2034a5f4aee75289de22e88b2ef9def8da6"},
 ]
 
 [[package]]
 name = "pydantic-core"
-version = "2.46.3"
+version = "2.46.4"
 summary = ""
 dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "pydantic_core-2.46.3-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:b11b59b3eee90a80a36701ddb4576d9ae31f93f05cb9e277ceaa09e6bf074a67"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:af8653713055ea18a3abc1537fe2ebc42f5b0bbb768d1eb79fd74eb47c0ac089"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:75a519dab6d63c514f3a81053e5266c549679e4aa88f6ec57f2b7b854aceb1b0"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:a6cd87cb1575b1ad05ba98894c5b5c96411ef678fa2f6ed2576607095b8d9789"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:f80a55484b8d843c8ada81ebf70a682f3f00a3d40e378c06cf17ecb44d280d7d"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:3861f1731b90c50a3266316b9044f5c9b405eecb8e299b0a7120596334e4fe9c"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fb528e295ed31570ac3dcc9bfdd6e0150bc11ce6168ac87a8082055cf1a67395"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_31_riscv64.whl", hash = "sha256:367508faa4973b992b271ba1494acaab36eb7e8739d1e47be5035fb1ea225396"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:5ad3c826fe523e4becf4fe39baa44286cff85ef137c729a2c5e269afbfd0905d"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:ec638c5d194ef8af27db69f16c954a09797c0dc25015ad6123eb2c73a4d271ca"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-musllinux_1_1_armv7l.whl", hash = "sha256:28ed528c45446062ee66edb1d33df5d88828ae167de76e773a3c7f64bd14e976"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:aed19d0c783886d5bd86d80ae5030006b45e28464218747dcf83dabfdd092c7b"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-win32.whl", hash = "sha256:06d5d8820cbbdb4147578c1fe7ffcd5b83f34508cb9f9ab76e807be7db6ff0a4"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-win_amd64.whl", hash = "sha256:c3212fda0ee959c1dd04c60b601ec31097aaa893573a3a1abd0a47bcac2968c1"},
-    {file = "pydantic_core-2.46.3-cp312-cp312-win_arm64.whl", hash = "sha256:f1f8338dd7a7f31761f1f1a3c47503a9a3b34eea3c8b01fa6ee96408affb5e72"},
-    {file = "pydantic_core-2.46.3-graalpy312-graalpy250_312_native-macosx_10_12_x86_64.whl", hash = "sha256:b12dd51f1187c2eb489af8e20f880362db98e954b54ab792fa5d92e8bcc6b803"},
-    {file = "pydantic_core-2.46.3-graalpy312-graalpy250_312_native-macosx_11_0_arm64.whl", hash = "sha256:f00a0961b125f1a47af7bcc17f00782e12f4cd056f83416006b30111d941dfa3"},
-    {file = "pydantic_core-2.46.3-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:57697d7c056aca4bbb680200f96563e841a6386ac1129370a0102592f4dddff5"},
-    {file = "pydantic_core-2.46.3-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fd35aa21299def8db7ef4fe5c4ff862941a9a158ca7b63d61e66fe67d30416b4"},
-    {file = "pydantic_core-2.46.3.tar.gz", hash = "sha256:41c178f65b8c29807239d47e6050262eb6bf84eb695e41101e62e38df4a5bc2c"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:3245406455a5d98187ec35530fd772b1d799b26667980872c8d4614991e2c4a2"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:962ccbab7b642487b1d8b7df90ef677e03134cf1fd8880bf698649b22a69371f"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8233f2947cf85404441fd7e0085f53b10c93e0ee78611099b5c7237e36aacbf7"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:3a233125ac121aa3ffba9a2b59edfc4a985a76092dc8279586ab4b71390875e7"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:5b712b53160b79a5850310b912a5ef8e57e56947c8ad690c227f5c9d7e561712"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:9401557acd873c3a7f3eb9383edef8ac4968f9510e340f4808d427e75667e7b4"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:926c9541b14b12b1681dca8a0b75feb510b06c6341b70a8e500c2fdcff837cce"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_31_riscv64.whl", hash = "sha256:56cb4851bcaf3d117eddcef4fe66afd750a50274b0da8e22be256d10e5611987"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:c68fcd102d71ea85c5b2dfac3f4f8476eff42a9e078fd5faefff6d145063536b"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:b2f69dec1725e79a012d920df1707de5caf7ed5e08f3be4435e25803efc47458"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-musllinux_1_1_armv7l.whl", hash = "sha256:8d0820e8192167f80d88d64038e609c31452eeca865b4e1d9950a27a4609b00b"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:fbdb89b3e1c94a30cc5edfce477c6e6a5dc4d8f84665b455c27582f211a1c72c"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-win32.whl", hash = "sha256:9aa768456404a8bf48a4406685ac2bec8e72b62c69313734fa3b73cf33b3a894"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-win_amd64.whl", hash = "sha256:e9c26f834c65f5752f3f06cb08cb86a913ceb7274d0db6e267808a708b46bc89"},
+    {file = "pydantic_core-2.46.4-cp312-cp312-win_arm64.whl", hash = "sha256:4fc73cb559bdb54b1134a706a2802a4cddd27a0633f5abb7e53056268751ac6a"},
+    {file = "pydantic_core-2.46.4-graalpy312-graalpy250_312_native-macosx_10_12_x86_64.whl", hash = "sha256:1d8ba486450b14f3b1d63bc521d410ec7565e52f887b9fb671791886436a42f7"},
+    {file = "pydantic_core-2.46.4-graalpy312-graalpy250_312_native-macosx_11_0_arm64.whl", hash = "sha256:3009f12e4e90b7f88b4f9adb1b0c4a3d58fe7820f3238c190047209d148026df"},
+    {file = "pydantic_core-2.46.4-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ad785e92e6dc634c21555edc8bd6b64957ab844541bcb96a1366c202951ae526"},
+    {file = "pydantic_core-2.46.4-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:00c603d540afdd6b80eb39f078f33ebd46211f02f33e34a32d9f053bba711de0"},
+    {file = "pydantic_core-2.46.4.tar.gz", hash = "sha256:62f875393d7f270851f20523dd2e29f082bcc82292d66db2b64ea71f64b6e1c1"},
 ]
 
 [[package]]
 name = "pydantic-evals"
-version = "1.90.0"
+version = "1.89.1"
 summary = ""
 dependencies = [
     "anyio",
@@ -2138,13 +2138,13 @@ dependencies = [
     "rich",
 ]
 files = [
-    {file = "pydantic_evals-1.90.0-py3-none-any.whl", hash = "sha256:d3b78775b90ad4c8e68c3cfaa7fe643492a2908bbb092333fadfbb50bc63bada"},
-    {file = "pydantic_evals-1.90.0.tar.gz", hash = "sha256:0bc676554b9f2c4e487f5e2bacb2d22ddb96390ebe0d85f62855cd1678491ed7"},
+    {file = "pydantic_evals-1.89.1-py3-none-any.whl", hash = "sha256:91e614adeba56af51415735c49a2b590813eb9d0151480eec892f71bcc1b59c7"},
+    {file = "pydantic_evals-1.89.1.tar.gz", hash = "sha256:3854d792029add7f80926f08219a2a8f02c37e6e4d00a0a07e324490cd09218c"},
 ]
 
 [[package]]
 name = "pydantic-graph"
-version = "1.90.0"
+version = "1.89.1"
 summary = ""
 dependencies = [
     "httpx",
@@ -2153,8 +2153,8 @@ dependencies = [
     "typing-inspection",
 ]
 files = [
-    {file = "pydantic_graph-1.90.0-py3-none-any.whl", hash = "sha256:0845d5726f95a63e89342bcf8236c8a660d616b7e5a30d8aa2c9a731f96018ed"},
-    {file = "pydantic_graph-1.90.0.tar.gz", hash = "sha256:30d69bb491599612ad88a5122ebf4a10a000eae8f89abb8910f1532bead23cc5"},
+    {file = "pydantic_graph-1.89.1-py3-none-any.whl", hash = "sha256:2ebce28573e81de9924c2ff68f90f949ccd96bbc2e8dc6cf4bb96208b34fbec0"},
+    {file = "pydantic_graph-1.89.1.tar.gz", hash = "sha256:99b8ae10fd10400208ee469355969e2dc253a600c3f667a5e790874064846e85"},
 ]
 
 [[package]]
@@ -2194,16 +2194,16 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.13.3"
+version = "2.13.4"
 extras = ["email"]
 summary = ""
 dependencies = [
     "email-validator",
-    "pydantic==2.13.3",
+    "pydantic==2.13.4",
 ]
 files = [
-    {file = "pydantic-2.13.3-py3-none-any.whl", hash = "sha256:6db14ac8dfc9a1e57f87ea2c0de670c251240f43cb0c30a5130e9720dc612927"},
-    {file = "pydantic-2.13.3.tar.gz", hash = "sha256:af09e9d1d09f4e7fe37145c1f577e1d61ceb9a41924bf0094a36506285d0a84d"},
+    {file = "pydantic-2.13.4-py3-none-any.whl", hash = "sha256:45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba"},
+    {file = "pydantic-2.13.4.tar.gz", hash = "sha256:c40756b57adaa8b1efeeced5c196f3f3b7c435f90e84ea7f443901bec8099ef6"},
 ]
 
 [[package]]
@@ -2586,15 +2586,15 @@ files = [
 
 [[package]]
 name = "sse-starlette"
-version = "3.4.1"
+version = "3.4.2"
 summary = ""
 dependencies = [
     "anyio",
     "starlette",
 ]
 files = [
-    {file = "sse_starlette-3.4.1-py3-none-any.whl", hash = "sha256:6b43cf21f1d574d582a6e1b0cfbde1c94dc86a32a701a7168c99c4475c6bd1d0"},
-    {file = "sse_starlette-3.4.1.tar.gz", hash = "sha256:f780bebcf6c8997fe514e3bd8e8c648d8284976b391c8bed0bcb1f611632b555"},
+    {file = "sse_starlette-3.4.2-py3-none-any.whl", hash = "sha256:6ea5d35b7ce979a3de5a0db5f77fe886b1616e4b3e1ad93fba502bd9b5fb662f"},
+    {file = "sse_starlette-3.4.2.tar.gz", hash = "sha256:2f9a7f51ed84395a0427fb9f66cb1ec11f7899d977a72cbc9070b962a2e14489"},
 ]
 
 [[package]]
@@ -2788,11 +2788,11 @@ files = [
 
 [[package]]
 name = "uncalled-for"
-version = "0.3.1"
+version = "0.3.2"
 summary = ""
 files = [
-    {file = "uncalled_for-0.3.1-py3-none-any.whl", hash = "sha256:074cdc92da8356278f93d0ded6f2a66dd883dbecaf9bc89437646ee2289cc200"},
-    {file = "uncalled_for-0.3.1.tar.gz", hash = "sha256:5e412ac6708f04b56bef5867b5dcf6690ebce4eb7316058d9c50787492bb4bca"},
+    {file = "uncalled_for-0.3.2-py3-none-any.whl", hash = "sha256:0ff60b142c7d1f8070bde9d42afaa70aedc77dcc10998c227687e9c15713418e"},
+    {file = "uncalled_for-0.3.2.tar.gz", hash = "sha256:89f5dbcd71e2b8f47c030b1fa302e6cce2ec795d1ac565eeb6525c5fe55cb8a2"},
 ]
 
 [[package]]
@@ -2898,7 +2898,7 @@ files = [
 
 [[package]]
 name = "xai-sdk"
-version = "1.12.1"
+version = "1.12.2"
 summary = ""
 dependencies = [
     "aiohttp",
@@ -2911,8 +2911,8 @@ dependencies = [
     "requests",
 ]
 files = [
-    {file = "xai_sdk-1.12.1-py3-none-any.whl", hash = "sha256:f5b83082df0969718e68d0bdf92fd57348b65f156682520261660c47caf958ad"},
-    {file = "xai_sdk-1.12.1.tar.gz", hash = "sha256:672ec5b864a136a5ec09f9b8bf904c84f601657257b9967eed93f4ce7c4256c3"},
+    {file = "xai_sdk-1.12.2-py3-none-any.whl", hash = "sha256:a3b4079f0629637009c5e3d58388f8c88591658dde31f202d5f5e8560fe6e120"},
+    {file = "xai_sdk-1.12.2.tar.gz", hash = "sha256:917d1887e6afdb49fff9f0dc6ae1bceede43a747365a406a3486af3e23509be4"},
 ]
 
 [[package]]

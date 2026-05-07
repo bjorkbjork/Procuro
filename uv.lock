@@ -1190,7 +1190,7 @@ requires-dist = [
     { name = "playwright", specifier = ">=1.59.0" },
     { name = "psycopg", specifier = ">=3.3.3" },
     { name = "pydantic", specifier = ">=2.13.3" },
-    { name = "pydantic-ai", specifier = ">=1.88.0" },
+    { name = "pydantic-ai", specifier = "==1.89.1" },
     { name = "pydantic-logfire", specifier = ">=0.0.1" },
     { name = "pyotp", specifier = ">=2.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
