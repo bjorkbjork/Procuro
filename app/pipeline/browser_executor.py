@@ -1,20 +1,19 @@
-"""Concurrent browser executor with deterministic-then-agent fallback.
+"""Browser-fallback executor — per-batch auth, deterministic → agent fallback.
 
-Extracts the ThreadPoolExecutor + BrowserSession + LLM-agent-recovery
-pattern used across pipeline stages. Subclasses define only:
+Builds on BatchExecutor (batch_executor.py) adding per-batch platform
+authentication, per-item BrowserSession lifecycle, deterministic → agent
+fallback, re-auth on login_required, and AutomationEvent recording.
+
+Subclasses define only:
   - what work items to process (grouped by platform)
   - what the deterministic Playwright action is
   - what the LLM agent fallback is
   - how to handle success
-
-The executor handles: thread pooling, browser session lifecycle,
-exception → detach → agent fallback, result collection, re-auth
-signaling, and AutomationEvent recording."""
+"""
 
 import logging
 import threading
-from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Generic, TypeVar
 
@@ -23,6 +22,7 @@ from sqlalchemy import func as sa_func
 from app.base.config import settings
 from app.db.database import SessionLocal
 from app.db.models.automation_event import AutomationEvent
+from app.pipeline.batch_executor import BatchExecutor
 from app.services.browser import BrowserSession, authenticate_platform, bb
 from app.services.platforms import get_platforms
 
@@ -63,46 +63,28 @@ class FallbackResult:
     result: object = None
 
 
-class BrowserFallbackExecutor(ABC, Generic[T, R]):
-    """Abstract concurrent executor for browser-based pipeline stages.
+@dataclass
+class _AttemptResult:
+    item: object
+    result: object
+    login_required: bool = False
 
-    Subclasses implement the abstract methods below. The executor handles
-    ThreadPoolExecutor, BrowserSession lifecycle, detach-on-failure,
-    result collection, re-auth, and AutomationEvent recording.
+    def as_tuple(self) -> tuple:
+        return (self.item, self.result)
+
+
+class BrowserFallbackExecutor(BatchExecutor[T, R]):
+    """Browser-based executor with per-batch authentication.
+
+    Each worker thread authenticates independently (own context_id) so
+    no two concurrent sessions share the same auth cookies / proxy IP.
     """
-
-    @property
-    @abstractmethod
-    def stage(self) -> str:
-        """Pipeline stage identifier (e.g. 's3_outreach')."""
-        ...
-
-    @property
-    @abstractmethod
-    def action(self) -> str:
-        """Action identifier (e.g. 'send_inquiry')."""
-        ...
-
-    @abstractmethod
-    def get_work_items(self) -> dict[str, list[T]]:
-        """Return work items grouped by platform name.
-
-        Each platform group gets a single authenticate_platform() call
-        and all items within share the resulting context_id.
-        """
-        ...
 
     @abstractmethod
     def deterministic_action(
         self, item: T, page, platform, context_id: str
     ) -> R | None:
         """Run the deterministic Playwright action for one work item.
-
-        Args:
-            item: The work item payload.
-            page: A live Playwright Page from the BrowserSession.
-            platform: The SupplierPlatform instance for this item's platform.
-            context_id: The authenticated context for this platform.
 
         Returns a result on success. Return None to skip (no fallback).
         Raise any exception to trigger agent fallback.
@@ -119,11 +101,6 @@ class BrowserFallbackExecutor(ABC, Generic[T, R]):
         """Handle a successful action (record to DB, update state, etc.)."""
         ...
 
-    @abstractmethod
-    def thread_label(self, item: T) -> str:
-        """Return a label for the worker thread name."""
-        ...
-
     def get_thread_id(self, item: T) -> int | None:
         """Return the supplier_thread_id for AutomationEvent FK. Default None."""
         return None
@@ -136,175 +113,145 @@ class BrowserFallbackExecutor(ABC, Generic[T, R]):
         """Build a platform_name → SupplierPlatform mapping."""
         return {p.platform.value: p for p in get_platforms()}
 
-    def execute(self) -> list[tuple[T, R | None]]:
-        """Run all work items concurrently with fallback. Returns results."""
-        grouped = self.get_work_items()
-        if not grouped:
-            return []
+    def _attempt_one(self, item: T, context_id: str, platform) -> _AttemptResult:
+        """Process one item: BrowserSession → deterministic → agent fallback."""
+        threading.current_thread().name = self.thread_label(item)
 
-        platform_objs = self._resolve_platforms()
-        all_results: list[tuple[T, R | None]] = []
+        browser = BrowserSession(
+            proxy_country="AU",
+            proxy_city="SYDNEY",
+            context_id=context_id,
+            keep_alive=True,
+        )
+        browser.__enter__()
+        session_id = browser.session_id
 
-        for platform_name, items in grouped.items():
-            platform = platform_objs.get(platform_name)
-            if not platform:
-                log.warning(
-                    "No platform for '%s' — skipping %d items",
-                    platform_name,
-                    len(items),
+        try:
+            result = self.deterministic_action(item, browser.page, platform, context_id)
+        except Exception as det_exc:
+            log.exception("Deterministic action failed for %s", self.thread_label(item))
+            browser.detach()
+
+            try:
+                fb = self.agent_fallback(item, session_id, platform)
+            except Exception as agent_exc:
+                log.exception("Agent fallback error for %s", self.thread_label(item))
+                record_automation_event(
+                    self.stage,
+                    self.action,
+                    "failed",
+                    self.get_thread_id(item),
+                    f"deterministic: {det_exc} | agent: {agent_exc}",
                 )
-                continue
+                bb.sessions.update(session_id, status="REQUEST_RELEASE")
+                return _AttemptResult(item=item, result=None)
 
-            log.info(
-                "Processing %d items on %s [%s/%s]",
-                len(items),
-                platform_name,
+            bb.sessions.update(session_id, status="REQUEST_RELEASE")
+
+            if fb.login_required:
+                record_automation_event(
+                    self.stage,
+                    self.action,
+                    "failed",
+                    self.get_thread_id(item),
+                    f"login_required: {det_exc}",
+                )
+                return _AttemptResult(item=item, result=None, login_required=True)
+
+            if fb.success:
+                record_automation_event(
+                    self.stage,
+                    self.action,
+                    "agent_fallback",
+                    self.get_thread_id(item),
+                    str(det_exc),
+                )
+                self.on_success(item, fb.result)
+                return _AttemptResult(item=item, result=fb.result)
+
+            record_automation_event(
                 self.stage,
                 self.action,
+                "failed",
+                self.get_thread_id(item),
+                str(det_exc),
             )
+            return _AttemptResult(item=item, result=None)
 
+        else:
+            if result is None:
+                browser.__exit__(None, None, None)
+                self.on_skip(item)
+                return _AttemptResult(item=item, result=None)
+
+            browser.__exit__(None, None, None)
+            record_automation_event(
+                self.stage,
+                self.action,
+                "deterministic",
+                self.get_thread_id(item),
+            )
+            self.on_success(item, result)
+            return _AttemptResult(item=item, result=result)
+
+    def _process_batch(
+        self, batch: list[T], group_key: str
+    ) -> list[tuple[T, R | None]]:
+        """Authenticate, process items sequentially, re-auth on login failures."""
+        platform_objs = self._resolve_platforms()
+        platform = platform_objs.get(group_key)
+        if not platform:
+            log.warning(
+                "No platform for '%s' — skipping %d items", group_key, len(batch)
+            )
+            return [(item, None) for item in batch]
+
+        try:
+            context_id = authenticate_platform(platform)
+        except Exception:
+            log.exception(
+                "Could not authenticate on %s — skipping %d items",
+                group_key,
+                len(batch),
+            )
+            return [(item, None) for item in batch]
+
+        results: list[tuple[T, R | None]] = []
+        reauth_items: list[T] = []
+
+        for item in batch:
+            ar = self._attempt_one(item, context_id, platform)
+            results.append(ar.as_tuple())
+            if ar.login_required:
+                reauth_items.append(item)
+
+        # Per-batch re-auth retry loop
+        for attempt in range(settings.REAUTH_MAX_RETRIES):
+            if not reauth_items:
+                break
+
+            log.info(
+                "Re-authenticating on %s after login prompt (attempt %d/%d)",
+                group_key,
+                attempt + 1,
+                settings.REAUTH_MAX_RETRIES,
+            )
             try:
                 context_id = authenticate_platform(platform)
             except Exception:
-                log.exception(
-                    "Could not authenticate on %s — skipping %d items",
-                    platform_name,
-                    len(items),
-                )
-                continue
+                log.exception("Re-auth failed on %s", group_key)
+                break
 
-            reauth_needed = threading.Event()
-            reauth_items: list[T] = []
+            retry_batch = list(reauth_items)
+            reauth_items.clear()
 
-            def _attempt(item: T, ctx_id: str = context_id) -> tuple[T, R | None]:
-                threading.current_thread().name = self.thread_label(item)
+            for item in retry_batch:
+                ar = self._attempt_one(item, context_id, platform)
+                results.append(ar.as_tuple())
+                if ar.login_required:
+                    reauth_items.append(item)
 
-                browser = BrowserSession(
-                    proxy_country="AU",
-                    context_id=ctx_id,
-                    keep_alive=True,
-                )
-                browser.__enter__()
-                session_id = browser.session_id
-
-                try:
-                    result = self.deterministic_action(
-                        item, browser.page, platform, ctx_id
-                    )
-                except Exception as det_exc:
-                    log.exception(
-                        "Deterministic action failed for %s", self.thread_label(item)
-                    )
-                    browser.detach()
-
-                    try:
-                        fb = self.agent_fallback(item, session_id, platform)
-                    except Exception as agent_exc:
-                        log.exception(
-                            "Agent fallback error for %s", self.thread_label(item)
-                        )
-                        record_automation_event(
-                            self.stage,
-                            self.action,
-                            "failed",
-                            self.get_thread_id(item),
-                            f"deterministic: {det_exc} | agent: {agent_exc}",
-                        )
-                        bb.sessions.update(session_id, status="REQUEST_RELEASE")
-                        return (item, None)
-
-                    bb.sessions.update(session_id, status="REQUEST_RELEASE")
-
-                    if fb.login_required:
-                        reauth_needed.set()
-                        reauth_items.append(item)
-                        record_automation_event(
-                            self.stage,
-                            self.action,
-                            "failed",
-                            self.get_thread_id(item),
-                            f"login_required: {det_exc}",
-                        )
-                        return (item, None)
-
-                    if fb.success:
-                        record_automation_event(
-                            self.stage,
-                            self.action,
-                            "agent_fallback",
-                            self.get_thread_id(item),
-                            str(det_exc),
-                        )
-                        self.on_success(item, fb.result)
-                        return (item, fb.result)
-
-                    record_automation_event(
-                        self.stage,
-                        self.action,
-                        "failed",
-                        self.get_thread_id(item),
-                        str(det_exc),
-                    )
-                    return (item, None)
-
-                else:
-                    if result is None:
-                        browser.__exit__(None, None, None)
-                        self.on_skip(item)
-                        return (item, None)
-
-                    browser.__exit__(None, None, None)
-                    record_automation_event(
-                        self.stage,
-                        self.action,
-                        "deterministic",
-                        self.get_thread_id(item),
-                    )
-                    self.on_success(item, result)
-                    return (item, result)
-
-            with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
-                futures = {pool.submit(_attempt, item): item for item in items}
-                for future in as_completed(futures):
-                    try:
-                        all_results.append(future.result())
-                    except Exception:
-                        item = futures[future]
-                        log.exception("Unhandled error for %s", self.thread_label(item))
-                        all_results.append((item, None))
-
-            # Re-auth retry loop with cap — items that hit LOGIN_REQUIRED
-            # get retried after re-authentication, up to REAUTH_MAX_RETRIES
-            for attempt in range(settings.REAUTH_MAX_RETRIES):
-                if not reauth_needed.is_set() or not reauth_items:
-                    break
-
-                log.info(
-                    "Re-authenticating on %s after login prompt (attempt %d/%d)",
-                    platform_name,
-                    attempt + 1,
-                    settings.REAUTH_MAX_RETRIES,
-                )
-                try:
-                    context_id = authenticate_platform(platform)
-                except Exception:
-                    log.exception("Re-auth failed on %s", platform_name)
-                    break
-
-                retry_batch = list(reauth_items)
-                reauth_items.clear()
-                reauth_needed.clear()
-
-                for item in retry_batch:
-                    try:
-                        all_results.append(_attempt(item, context_id))
-                    except Exception:
-                        log.exception(
-                            "Re-auth retry failed for %s", self.thread_label(item)
-                        )
-                        all_results.append((item, None))
-
-        return all_results
+        return results
 
 
 def run_with_browser_fallback(
@@ -323,6 +270,7 @@ def run_with_browser_fallback(
     """
     browser = BrowserSession(
         proxy_country="AU",
+        proxy_city="SYDNEY",
         context_id=context_id,
         keep_alive=True,
     )

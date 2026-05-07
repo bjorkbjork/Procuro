@@ -45,7 +45,7 @@ def search_suppliers(
         "popupFlag": False,
     }
 
-    with BrowserSession(proxy_country="AU") as browser:
+    with BrowserSession(proxy_country="AU", proxy_city="SYDNEY") as browser:
         browser.page.goto(LANDING_URL, wait_until="networkidle")
         data = browser.page.evaluate(_JS_SEARCH, payload)
 

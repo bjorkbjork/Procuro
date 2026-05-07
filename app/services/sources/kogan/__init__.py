@@ -8,6 +8,7 @@ from app.services.sources.kogan.service import (
 class Source:
     name = "kogan"
     proxy_country = "AU"
+    proxy_city = "SYDNEY"
     spec_selector = None
 
     def parse_title(self, html: str) -> str:
