@@ -1,0 +1,41 @@
+name: Fetch Logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        type: environment
+      lines:
+        description: "Number of log lines (default 500)"
+        required: false
+        default: "500"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Fetch logs
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cd ~/sourcingAgent && sudo docker compose logs app --tail ${{ inputs.lines }} --no-color 2>&1" \
+            > app-logs.txt
+
+          echo '### App Logs (last ${{ inputs.lines }} lines)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat app-logs.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-logs-${{ github.run_number }}
+          path: app-logs.txt
+          retention-days: 7
