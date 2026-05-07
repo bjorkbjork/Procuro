@@ -1,42 +1,37 @@
 """Stage 5: Process supplier replies and negotiate prices.
 
-Flow per thread:
-1. Pick up threads in AWAITING_REPLY where respond_after has passed (or is null).
-2. First reply from a supplier triggers a spec check via the match agent.
-   - SPEC_CHECK_FAIL → send polite decline, close thread.
-   - SPEC_CHECK_PASS → fall through to negotiation.
-3. Run the negotiation agent with full conversation history.
-4. Act on the result:
-   - reply  → send reply, record quote, set respond_after delay, NEGOTIATING
-   - silence → set respond_after delay (no reply sent)
-   - close  → send final reply, record quote, FINAL_PRICE_LOGGED or CLOSED
+Two-step flow:
+1. NegotiationExecutor (BatchExecutor) — fans out LLM negotiations across
+   threads. Runs spec check, negotiate(), records quotes, updates state.
+   Returns decisions with optional reply_text.
+2. Reply sending — email replies sent directly, platform replies sent via
+   PlatformReplyExecutor (BrowserFallbackExecutor) with per-thread auth.
 
-Replies are sent via a channel-agnostic reply_fn closure — _process_thread
-never knows whether it's Gmail or platform messaging.
+_process_thread remains for backward compat / unit testing — it wraps
+_negotiate_thread + send in one call.
 """
 
 import logging
 import random
+import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from app.base.config import settings
+from app.db.database import SessionLocal
+from app.db.models.message import Message
+from app.db.models.quote import Quote
+from app.db.models.supplier_thread import SupplierThread
 from app.pipeline.agents.match_agent import compare_products
 from app.pipeline.agents.negotiation_agent import (
     NegotiationAction,
     build_message_history,
     negotiate,
 )
-from app.db.database import SessionLocal
-from app.db.models.message import Message
-from app.db.models.quote import Quote
-from app.db.models.supplier_thread import SupplierThread
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from app.base.config import settings
-from app.pipeline.browser_executor import FallbackResult, run_with_browser_fallback
-from app.services.browser import authenticate_platform
+from app.pipeline.batch_executor import BatchExecutor
+from app.pipeline.browser_executor import BrowserFallbackExecutor, FallbackResult
 from app.services.gmail import GmailService
-from app.services.platforms import get_platforms
 from app.pipeline.stages.s4_inbox_triage import _extract_sender
 
 log = logging.getLogger(__name__)
@@ -160,12 +155,24 @@ def _send_and_record(
     return False
 
 
-def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
-    """Process a single thread. Returns a status string for logging."""
+# ---------------------------------------------------------------------------
+# Negotiation logic (LLM-only, no sending)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class NegotiationDecision:
+    thread_id: int
+    status: str
+    reply_text: str | None = None
+
+
+def _negotiate_thread(thread_id: int) -> NegotiationDecision:
+    """Run negotiation for one thread. Updates DB state, returns decision."""
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         if not thread:
-            return "not_found"
+            return NegotiationDecision(thread_id=thread_id, status="not_found")
 
         state = thread.state
         negotiation_rounds = thread.negotiation_rounds
@@ -185,24 +192,24 @@ def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
     if state == "AWAITING_REPLY" and negotiation_rounds == 0:
         passed = _run_spec_check(thread_id)
         if not passed:
-            _send_and_record(
-                thread_id,
-                "Thank you for your response. Unfortunately, the specifications "
-                "do not match our requirements. We appreciate your time.",
-                reply_fn,
-                channel,
-            )
             with SessionLocal() as session:
                 thread = session.get(SupplierThread, thread_id)
                 thread.state = "CLOSED"
                 session.commit()
-            return "spec_check_fail"
+            return NegotiationDecision(
+                thread_id=thread_id,
+                status="spec_check_fail",
+                reply_text=(
+                    "Thank you for your response. Unfortunately, the specifications "
+                    "do not match our requirements. We appreciate your time."
+                ),
+            )
         # Passed — fall through to negotiation
 
     # Build message history and run negotiation
     inbound_messages = [m for m in messages if m.direction == "inbound"]
     if not inbound_messages:
-        return "no_inbound"
+        return NegotiationDecision(thread_id=thread_id, status="no_inbound")
 
     latest_inbound = inbound_messages[-1]
     message_history = build_message_history(messages[:-1]) if len(messages) > 1 else []
@@ -226,9 +233,6 @@ def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
     _record_quote(thread_id, eq.price_usd, eq.moq, eq.lead_time)
 
     if result.action == NegotiationAction.REPLY:
-        if result.reply_text:
-            _send_and_record(thread_id, result.reply_text, reply_fn, channel)
-
         with SessionLocal() as session:
             thread = session.get(SupplierThread, thread_id)
             thread.state = "NEGOTIATING"
@@ -238,7 +242,9 @@ def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
                 REPLY_DELAY_MAX_HOURS,
             )
             session.commit()
-        return "replied"
+        return NegotiationDecision(
+            thread_id=thread_id, status="replied", reply_text=result.reply_text
+        )
 
     elif result.action == NegotiationAction.SILENCE:
         with SessionLocal() as session:
@@ -248,12 +254,9 @@ def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
                 SILENCE_DELAY_MAX_HOURS,
             )
             session.commit()
-        return "silence"
+        return NegotiationDecision(thread_id=thread_id, status="silence")
 
     elif result.action == NegotiationAction.CLOSE:
-        if result.reply_text:
-            _send_and_record(thread_id, result.reply_text, reply_fn, channel)
-
         with SessionLocal() as session:
             thread = session.get(SupplierThread, thread_id)
             if eq.price_usd is not None:
@@ -261,13 +264,23 @@ def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
             else:
                 thread.state = "CLOSED"
             session.commit()
-        return "closed"
+        return NegotiationDecision(
+            thread_id=thread_id, status="closed", reply_text=result.reply_text
+        )
 
-    return "unknown"
+    return NegotiationDecision(thread_id=thread_id, status="unknown")
+
+
+def _process_thread(thread_id: int, reply_fn: ReplyFn, channel: str) -> str:
+    """Full thread processing: negotiate then send. For backward compat / testing."""
+    decision = _negotiate_thread(thread_id)
+    if decision.reply_text:
+        _send_and_record(thread_id, decision.reply_text, reply_fn, channel)
+    return decision.status
 
 
 # ---------------------------------------------------------------------------
-# Reply function builders
+# Email reply helpers
 # ---------------------------------------------------------------------------
 
 
@@ -299,54 +312,8 @@ def _make_email_reply_fn(gmail: GmailService, gmail_thread_id: str) -> ReplyFn:
     return reply_fn
 
 
-def _make_platform_reply_fn(
-    platform, context_id: str, conversation_url: str, thread_id: int
-) -> ReplyFn:
-    """Build a reply_fn that sends via platform messaging.
-
-    Tries deterministic Playwright first, falls back to the LLM agent.
-    Uses run_with_browser_fallback for consistent lifecycle and event recording.
-    """
-    from app.pipeline.agents.platform_message_agent import (
-        ReplyStatus,
-        send_reply_via_agent,
-    )
-
-    def reply_fn(body: str) -> str | None:
-        msg_id = f"platform_{id(body)}"
-
-        def deterministic(page):
-            success = platform.send_platform_reply(page, conversation_url, body)
-            if not success:
-                raise RuntimeError("Deterministic send returned False")
-            return msg_id
-
-        def fallback(session_id):
-            result = send_reply_via_agent(
-                session_id,
-                conversation_url,
-                body,
-                platform_prompt=platform.messaging_agent_prompt,
-            )
-            return FallbackResult(
-                success=(result.status == ReplyStatus.SENT),
-                result=msg_id,
-            )
-
-        return run_with_browser_fallback(
-            context_id,
-            deterministic,
-            fallback,
-            stage="s5_negotiation",
-            action="send_reply",
-            supplier_thread_id=thread_id,
-        )
-
-    return reply_fn
-
-
 # ---------------------------------------------------------------------------
-# Main entry point
+# Thread metadata
 # ---------------------------------------------------------------------------
 
 
@@ -368,88 +335,178 @@ def _prepare_thread_metadata(thread_ids: list[int]) -> list[dict]:
     return metadata
 
 
+# ---------------------------------------------------------------------------
+# Executors
+# ---------------------------------------------------------------------------
+
+
+class NegotiationExecutor(BatchExecutor):
+    """Fan out LLM negotiations across threads."""
+
+    @property
+    def stage(self) -> str:
+        return "s5_negotiation"
+
+    @property
+    def action(self) -> str:
+        return "negotiate"
+
+    def __init__(self):
+        self._thread_ids = _get_ready_threads()
+
+    def get_work_items(self) -> dict[str, list[dict]]:
+        if not self._thread_ids:
+            return {}
+        meta_list = _prepare_thread_metadata(self._thread_ids)
+        grouped: dict[str, list[dict]] = {}
+        for meta in meta_list:
+            grouped.setdefault(meta["platform_name"], []).append(meta)
+        return grouped
+
+    def _process_batch(
+        self, batch: list[dict], group_key: str
+    ) -> list[tuple[dict, NegotiationDecision | None]]:
+        results: list[tuple[dict, NegotiationDecision | None]] = []
+        for item in batch:
+            threading.current_thread().name = self.thread_label(item)
+            thread_id = item["thread_id"]
+
+            # Skip threads with no reply channel
+            if item["channel"] == "email" and not item["gmail_thread_id"]:
+                log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
+                results.append((item, NegotiationDecision(thread_id, "no_channel")))
+                continue
+            if item["channel"] != "email" and not item["platform_thread_url"]:
+                log.warning("Thread %d has no platform_thread_url, skipping", thread_id)
+                results.append((item, NegotiationDecision(thread_id, "no_channel")))
+                continue
+
+            try:
+                decision = _negotiate_thread(thread_id)
+                results.append((item, decision))
+            except Exception:
+                log.exception("Error negotiating thread %d", thread_id)
+                results.append((item, None))
+        return results
+
+    def thread_label(self, item: dict) -> str:
+        return f"negotiate-{item['thread_id']}"
+
+
+class PlatformReplyExecutor(BrowserFallbackExecutor):
+    """Send platform replies via browser with per-thread auth."""
+
+    def __init__(self, reply_items: dict[str, list[dict]]):
+        self._items = reply_items
+
+    @property
+    def stage(self) -> str:
+        return "s5_negotiation"
+
+    @property
+    def action(self) -> str:
+        return "send_reply"
+
+    def get_work_items(self) -> dict[str, list[dict]]:
+        return self._items
+
+    def deterministic_action(self, item: dict, page, platform, context_id: str):
+        success = platform.send_platform_reply(
+            page, item["conversation_url"], item["reply_text"]
+        )
+        if not success:
+            raise RuntimeError("Deterministic send returned False")
+        return f"platform_{item['thread_id']}"
+
+    def agent_fallback(self, item: dict, session_id: str, platform) -> FallbackResult:
+        from app.pipeline.agents.platform_message_agent import (
+            ReplyStatus,
+            send_reply_via_agent,
+        )
+
+        result = send_reply_via_agent(
+            session_id,
+            item["conversation_url"],
+            item["reply_text"],
+            platform_prompt=platform.messaging_agent_prompt,
+        )
+        return FallbackResult(
+            success=(result.status == ReplyStatus.SENT),
+            result=f"platform_{item['thread_id']}",
+        )
+
+    def on_success(self, item: dict, result) -> None:
+        _record_outbound(item["thread_id"], result, "platform", item["reply_text"])
+
+    def thread_label(self, item: dict) -> str:
+        return f"reply-{item['thread_id']}"
+
+    def get_thread_id(self, item: dict) -> int | None:
+        return item.get("thread_id")
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+
 def process_negotiations() -> dict:
-    """Process all threads ready for negotiation concurrently.
+    """Process all threads ready for negotiation.
+
+    Step 1: NegotiationExecutor fans out LLM negotiations.
+    Step 2a: Email replies sent directly via Gmail.
+    Step 2b: Platform replies sent via PlatformReplyExecutor (browser).
 
     Returns a summary dict with counts per outcome.
     """
-    thread_ids = _get_ready_threads()
-
-    if not thread_ids:
+    # Step 1: Negotiate
+    results = NegotiationExecutor().execute()
+    if not results:
         log.info("No threads ready for negotiation")
         return {}
 
-    log.info("Processing %d threads for negotiation", len(thread_ids))
-
-    # Pre-load thread metadata and authenticate platforms before the pool
-    thread_meta = _prepare_thread_metadata(thread_ids)
-    gmail = GmailService()
-    platform_objs = {p.platform.value: p for p in get_platforms()}
-    platform_contexts: dict[str, str] = {}
-
-    # Pre-authenticate all needed platforms (avoids races in the pool)
-    for meta in thread_meta:
-        if meta["channel"] != "email":
-            pname = meta["platform_name"]
-            if pname not in platform_contexts and pname in platform_objs:
-                try:
-                    platform_contexts[pname] = authenticate_platform(
-                        platform_objs[pname]
-                    )
-                except Exception:
-                    log.exception("Could not authenticate on %s", pname)
+    log.info("Negotiated %d threads", len(results))
 
     counts: dict[str, int] = {}
-    lock = __import__("threading").Lock()
+    email_replies: list[tuple[dict, NegotiationDecision]] = []
+    platform_replies: dict[str, list[dict]] = {}
 
-    def _process_one(meta: dict) -> str:
-        thread_id = meta["thread_id"]
-        channel = meta["channel"]
+    for meta, decision in results:
+        if decision is None:
+            counts["error"] = counts.get("error", 0) + 1
+            continue
 
-        if channel == "email":
+        counts[decision.status] = counts.get(decision.status, 0) + 1
+        log.info("Thread %d → %s", decision.thread_id, decision.status)
+
+        if decision.reply_text:
+            if meta["channel"] == "email":
+                email_replies.append((meta, decision))
+            elif meta["platform_thread_url"]:
+                platform_replies.setdefault(meta["platform_name"], []).append(
+                    {
+                        "thread_id": decision.thread_id,
+                        "reply_text": decision.reply_text,
+                        "conversation_url": meta["platform_thread_url"],
+                    }
+                )
+
+    # Step 2a: Send email replies
+    if email_replies:
+        gmail = GmailService()
+        for meta, decision in email_replies:
             if not meta["gmail_thread_id"]:
-                log.warning("Thread %d has no gmail_thread_id, skipping", thread_id)
-                return "no_channel"
+                continue
             reply_fn = _make_email_reply_fn(gmail, meta["gmail_thread_id"])
-        else:
-            if not meta["platform_thread_url"]:
-                log.warning("Thread %d has no platform_thread_url, skipping", thread_id)
-                return "no_channel"
-            platform = platform_objs.get(meta["platform_name"])
-            if not platform:
-                log.warning(
-                    "No platform for '%s', skipping thread %d",
-                    meta["platform_name"],
-                    thread_id,
+            msg_id = reply_fn(decision.reply_text)
+            if msg_id is not None:
+                _record_outbound(
+                    decision.thread_id, msg_id, "email", decision.reply_text
                 )
-                return "no_channel"
-            ctx = platform_contexts.get(meta["platform_name"])
-            if not ctx:
-                log.warning(
-                    "No auth context for '%s', skipping thread %d",
-                    meta["platform_name"],
-                    thread_id,
-                )
-                return "no_channel"
-            reply_fn = _make_platform_reply_fn(
-                platform, ctx, meta["platform_thread_url"], thread_id
-            )
 
-        return _process_thread(thread_id, reply_fn, channel)
-
-    with ThreadPoolExecutor(max_workers=settings.MAX_WORKERS) as pool:
-        futures = {pool.submit(_process_one, meta): meta for meta in thread_meta}
-        for future in as_completed(futures):
-            meta = futures[future]
-            try:
-                status = future.result()
-                with lock:
-                    counts[status] = counts.get(status, 0) + 1
-                log.info("Thread %d → %s", meta["thread_id"], status)
-            except Exception:
-                log.exception("Error processing thread %d", meta["thread_id"])
-                with lock:
-                    counts["error"] = counts.get("error", 0) + 1
+    # Step 2b: Send platform replies
+    if platform_replies:
+        PlatformReplyExecutor(platform_replies).execute()
 
     log.info("Negotiation processing complete: %s", counts)
     return counts

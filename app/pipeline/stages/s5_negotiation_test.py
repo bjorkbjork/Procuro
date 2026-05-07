@@ -560,7 +560,6 @@ class TestProcessNegotiations:
             patch(
                 "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
             ),
-            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
             patch(
                 "app.pipeline.stages.s5_negotiation.compare_products",
                 return_value=match_result,
@@ -574,11 +573,8 @@ class TestProcessNegotiations:
         assert counts.get("replied", 0) >= 1
 
     def test_empty_when_no_threads(self):
-        with (
-            patch("app.pipeline.stages.s5_negotiation.GmailService"),
-            patch(
-                "app.pipeline.stages.s5_negotiation._get_ready_threads", return_value=[]
-            ),
+        with patch(
+            "app.pipeline.stages.s5_negotiation._get_ready_threads", return_value=[]
         ):
             counts = process_negotiations()
 
@@ -591,13 +587,9 @@ class TestProcessNegotiations:
             thread.gmail_thread_id = None
             session.commit()
 
-        gmail = _mock_gmail()
-
-        with (
-            patch(
-                "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
-            ),
-            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
+        with patch(
+            "app.pipeline.stages.s5_negotiation.GmailService",
+            return_value=_mock_gmail(),
         ):
             counts = process_negotiations()
 
@@ -610,20 +602,23 @@ class TestProcessNegotiations:
 
         call_count = 0
 
-        def failing_then_ok(tid, reply_fn, channel):
+        def failing_then_ok(thread_id):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("Simulated failure")
-            return "replied"
+            from app.pipeline.stages.s5_negotiation import NegotiationDecision
+
+            return NegotiationDecision(
+                thread_id=thread_id, status="replied", reply_text="counter"
+            )
 
         with (
             patch(
                 "app.pipeline.stages.s5_negotiation.GmailService", return_value=gmail
             ),
-            patch("app.pipeline.stages.s5_negotiation.get_platforms", return_value=[]),
             patch(
-                "app.pipeline.stages.s5_negotiation._process_thread",
+                "app.pipeline.stages.s5_negotiation._negotiate_thread",
                 side_effect=failing_then_ok,
             ),
         ):
