@@ -284,11 +284,17 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
+                    # Stage 1→2 gap: searched source product ids
+                    q.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Stage 1→2 gap: never-searched source products
+                    q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 3:
                     # Pending: source_id=1
                     q.filter.return_value.distinct.return_value.all.return_value = [
                         (1,)
                     ]
-                elif call_count["n"] == 2:
+                elif call_count["n"] == 4:
                     # Searched sids (empty after pending excluded)
                     q.distinct.return_value.all.return_value = []
                 else:
@@ -326,15 +332,21 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
+                    # Stage 1→2 gap: searched source product ids
+                    q.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Stage 1→2 gap: never-searched source products
+                    q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 3:
                     # No pending
                     q.filter.return_value.distinct.return_value.all.return_value = []
-                elif call_count["n"] == 2:
+                elif call_count["n"] == 4:
                     # One searched source product
                     q.distinct.return_value.all.return_value = [(42,)]
-                elif call_count["n"] == 3:
+                elif call_count["n"] == 5:
                     # Thread count: 2 (under threshold)
                     q.filter_by.return_value.count.return_value = 2
-                elif call_count["n"] == 4:
+                elif call_count["n"] == 6:
                     # Candidate count: 50 (under limit)
                     q.filter_by.return_value.count.return_value = 50
                 else:
@@ -372,12 +384,18 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    q.filter.return_value.distinct.return_value.all.return_value = []
+                    # Stage 1→2 gap: searched source product ids
+                    q.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 2:
-                    q.distinct.return_value.all.return_value = [(42,)]
+                    # Stage 1→2 gap: never-searched source products
+                    q.filter.return_value.all.return_value = []
                 elif call_count["n"] == 3:
-                    q.filter_by.return_value.count.return_value = 2
+                    q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 4:
+                    q.distinct.return_value.all.return_value = [(42,)]
+                elif call_count["n"] == 5:
+                    q.filter_by.return_value.count.return_value = 2
+                elif call_count["n"] == 6:
                     q.filter_by.return_value.count.return_value = (
                         settings.MAX_CANDIDATES_PER_PRODUCT
                     )
@@ -415,8 +433,14 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    q.filter.return_value.distinct.return_value.all.return_value = []
+                    # Stage 1→2 gap: searched source product ids
+                    q.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 2:
+                    # Stage 1→2 gap: never-searched source products
+                    q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 3:
+                    q.filter.return_value.distinct.return_value.all.return_value = []
+                elif call_count["n"] == 4:
                     q.distinct.return_value.all.return_value = []
                 else:
                     q.filter.return_value.count.return_value = 5
