@@ -678,15 +678,15 @@ files = [
 
 [[package]]
 name = "genai-prices"
-version = "0.0.57"
+version = "0.0.59"
 summary = ""
 dependencies = [
     "httpx",
     "pydantic",
 ]
 files = [
-    {file = "genai_prices-0.0.57-py3-none-any.whl", hash = "sha256:14e50fb69cdc5a06ddb2a6df5a7fe06741b9e44304ce3f1728f56abdf1856cca"},
-    {file = "genai_prices-0.0.57.tar.gz", hash = "sha256:6e101e9c53975557ceffa237b0995787d81fe75aac12410f2898504188bcad89"},
+    {file = "genai_prices-0.0.59-py3-none-any.whl", hash = "sha256:88fd8818e6807374e5a5c03f293b574ade5f18a3060622080cdd94a03cf43115"},
+    {file = "genai_prices-0.0.59.tar.gz", hash = "sha256:3e1c7dcd9b38163589c8cf4a9bcfd286c52ea57a3becdc062a2cbaa8295b08c4"},
 ]
 
 [[package]]
@@ -723,55 +723,55 @@ files = [
 
 [[package]]
 name = "google-auth"
-version = "2.50.0"
+version = "2.51.0"
 summary = ""
 dependencies = [
     "cryptography",
     "pyasn1-modules",
 ]
 files = [
-    {file = "google_auth-2.50.0-py3-none-any.whl", hash = "sha256:04382175e28b94f49694977f0a792688b59a668def1499e9d8de996dc9ce5b15"},
-    {file = "google_auth-2.50.0.tar.gz", hash = "sha256:f35eafb191195328e8ce10a7883970877e7aeb49c2bfaa54aa0e394316d353d0"},
+    {file = "google_auth-2.51.0-py3-none-any.whl", hash = "sha256:230bd016f50d4c0b82fda2f50db5d372bc02cfd9bdab4ce5a9ce0d8c0f06bba5"},
+    {file = "google_auth-2.51.0.tar.gz", hash = "sha256:a8191008d6aaace30f0823daa3f0073c734f8b4da8b8de074b5151aa9aa732c5"},
 ]
 
 [[package]]
 name = "google-auth-httplib2"
-version = "0.3.1"
+version = "0.4.0"
 summary = ""
 dependencies = [
     "google-auth",
     "httplib2",
 ]
 files = [
-    {file = "google_auth_httplib2-0.3.1-py3-none-any.whl", hash = "sha256:682356a90ef4ba3d06548c37e9112eea6fc00395a11b0303a644c1a86abc275c"},
-    {file = "google_auth_httplib2-0.3.1.tar.gz", hash = "sha256:0af542e815784cb64159b4469aa5d71dd41069ba93effa006e1916b1dcd88e55"},
+    {file = "google_auth_httplib2-0.4.0-py3-none-any.whl", hash = "sha256:8e55cfafa3358cba85f6cad4a886138e88e158d71e7e5c9ee5936a5c1507fb91"},
+    {file = "google_auth_httplib2-0.4.0.tar.gz", hash = "sha256:d5b030a204b7a4b4d553ba9ca701b62481ee2b74419325580be70f7d85ffed35"},
 ]
 
 [[package]]
 name = "google-auth-oauthlib"
-version = "1.3.1"
+version = "1.4.0"
 summary = ""
 dependencies = [
     "google-auth",
     "requests-oauthlib",
 ]
 files = [
-    {file = "google_auth_oauthlib-1.3.1-py3-none-any.whl", hash = "sha256:1a139ef23f1318756805b0e95f655c238bffd29655329a2978218248da4ee7f8"},
-    {file = "google_auth_oauthlib-1.3.1.tar.gz", hash = "sha256:14c22c7b3dd3d06dbe44264144409039465effdd1eef94f7ce3710e486cc4bfa"},
+    {file = "google_auth_oauthlib-1.4.0-py3-none-any.whl", hash = "sha256:251314f213a9ee46a5ae73988e84fd7cca8bb68e7ecf4bfd45940f9e7f51d070"},
+    {file = "google_auth_oauthlib-1.4.0.tar.gz", hash = "sha256:18b5e28880eb8eba9065c436becdc0ee8e4b59117a73a510679c82f70cd363d2"},
 ]
 
 [[package]]
 name = "google-auth"
-version = "2.50.0"
+version = "2.51.0"
 extras = ["requests"]
 summary = ""
 dependencies = [
-    "google-auth==2.50.0",
+    "google-auth==2.51.0",
     "requests",
 ]
 files = [
-    {file = "google_auth-2.50.0-py3-none-any.whl", hash = "sha256:04382175e28b94f49694977f0a792688b59a668def1499e9d8de996dc9ce5b15"},
-    {file = "google_auth-2.50.0.tar.gz", hash = "sha256:f35eafb191195328e8ce10a7883970877e7aeb49c2bfaa54aa0e394316d353d0"},
+    {file = "google_auth-2.51.0-py3-none-any.whl", hash = "sha256:230bd016f50d4c0b82fda2f50db5d372bc02cfd9bdab4ce5a9ce0d8c0f06bba5"},
+    {file = "google_auth-2.51.0.tar.gz", hash = "sha256:a8191008d6aaace30f0823daa3f0073c734f8b4da8b8de074b5151aa9aa732c5"},
 ]
 
 [[package]]
@@ -797,14 +797,14 @@ files = [
 
 [[package]]
 name = "googleapis-common-protos"
-version = "1.74.0"
+version = "1.75.0"
 summary = ""
 dependencies = [
     "protobuf",
 ]
 files = [
-    {file = "googleapis_common_protos-1.74.0-py3-none-any.whl", hash = "sha256:702216f78610bb510e3f12ac3cafd281b7ac45cc5d86e90ad87e4d301a3426b5"},
-    {file = "googleapis_common_protos-1.74.0.tar.gz", hash = "sha256:57971e4eeeba6aad1163c1f0fc88543f965bb49129b8bb55b2b7b26ecab084f1"},
+    {file = "googleapis_common_protos-1.75.0-py3-none-any.whl", hash = "sha256:961ed60399c457ceb0ee8f285a84c870aabc9c6a832b9d37bb281b5bebde43ed"},
+    {file = "googleapis_common_protos-1.75.0.tar.gz", hash = "sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd"},
 ]
 
 [[package]]
@@ -1216,14 +1216,14 @@ files = [
 
 [[package]]
 name = "markdown-it-py"
-version = "4.1.0"
+version = "4.2.0"
 summary = ""
 dependencies = [
     "mdurl",
 ]
 files = [
-    {file = "markdown_it_py-4.1.0-py3-none-any.whl", hash = "sha256:d4939a62a2dd0cd9cb80a191a711ba1d39bac8ed5ef9e9966895b0171c01c46d"},
-    {file = "markdown_it_py-4.1.0.tar.gz", hash = "sha256:760e3f87b2787c044c5138a5ba107b7c2be26c03b13cc7f8fe42756b65b1df6c"},
+    {file = "markdown_it_py-4.2.0-py3-none-any.whl", hash = "sha256:9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a"},
+    {file = "markdown_it_py-4.2.0.tar.gz", hash = "sha256:04a21681d6fbb623de53f6f364d352309d4094dd4194040a10fd51833e418d49"},
 ]
 
 [[package]]
@@ -1281,7 +1281,7 @@ files = [
 
 [[package]]
 name = "mistralai"
-version = "2.4.4"
+version = "2.4.5"
 summary = ""
 dependencies = [
     "eval-type-backport",
@@ -1294,8 +1294,8 @@ dependencies = [
     "typing-inspection",
 ]
 files = [
-    {file = "mistralai-2.4.4-py3-none-any.whl", hash = "sha256:43dd3b1f0f4f960a723359165c4da0d035590b27c050028322934fe4f189f14e"},
-    {file = "mistralai-2.4.4.tar.gz", hash = "sha256:cd8a27a230e5458b62237a6c4f7b52f5be86909fbc18694360ceb21dac932eda"},
+    {file = "mistralai-2.4.5-py3-none-any.whl", hash = "sha256:bf3b6550258ab16dec8547b90e9c18bebf9099f55b7fc25a884bf0bbeffced0f"},
+    {file = "mistralai-2.4.5.tar.gz", hash = "sha256:ef165bb004ec4423cbf19a440bf0983ca0c3fc92ab12a35ebca097bdf418e33a"},
 ]
 
 [[package]]
@@ -1638,14 +1638,14 @@ files = [
 
 [[package]]
 name = "proto-plus"
-version = "1.27.2"
+version = "1.28.0"
 summary = ""
 dependencies = [
     "protobuf",
 ]
 files = [
-    {file = "proto_plus-1.27.2-py3-none-any.whl", hash = "sha256:6432f75893d3b9e70b9c412f1d2f03f65b11fb164b793d14ae2ca01821d22718"},
-    {file = "proto_plus-1.27.2.tar.gz", hash = "sha256:b2adde53adadf75737c44d3dcb0104fde65250dfc83ad59168b4aa3e574b6a24"},
+    {file = "proto_plus-1.28.0-py3-none-any.whl", hash = "sha256:a630604310899e73c59ec302e5765c058d412b2f090b9c79c8822589f14955b8"},
+    {file = "proto_plus-1.28.0.tar.gz", hash = "sha256:38e5696342835b08fc116f30a25665b29531cda9d5d5643e9b81fc312385abd9"},
 ]
 
 [[package]]

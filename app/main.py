@@ -172,6 +172,7 @@ def _recover_stalled_inner():
     from datetime import datetime, timezone, timedelta
 
     from app.db.database import SessionLocal
+    from app.db.models.source_product import SourceProduct
     from app.db.models.supplier_product import SupplierProduct
     from app.db.models.supplier_thread import SupplierThread
     from app.pipeline.stages.s2_supplier_search import (
@@ -179,6 +180,35 @@ def _recover_stalled_inner():
         run_supplier_search,
     )
     from app.pipeline.stages.s3_outreach import send_outreach
+
+    # --- Stage 1→2 gap: source products with specs but no supplier products ------
+    with SessionLocal() as session:
+        searched_sids = {
+            row[0]
+            for row in session.query(SupplierProduct.source_product_id).distinct().all()
+        }
+        never_searched = (
+            session.query(SourceProduct.id)
+            .filter(
+                SourceProduct.specs.isnot(None),
+                ~SourceProduct.id.in_(searched_sids) if searched_sids else True,
+            )
+            .all()
+        )
+    never_searched_ids = [row[0] for row in never_searched]
+
+    if never_searched_ids:
+        log.info(
+            "Recovery: %d source products with specs but no supplier search",
+            len(never_searched_ids),
+        )
+        _fan_out(
+            "recovery_search_new",
+            run_supplier_search,
+            never_searched_ids,
+            max_workers=1,
+            label=str,
+        )
 
     # --- Stage 2a: unmatched supplier products ----------------------------------
     with SessionLocal() as session:
