@@ -1,14 +1,16 @@
-"""GlobalSources supplier platform — agent-first implementation.
+"""GlobalSources supplier platform.
 
-Deterministic browser methods (inquiry, messaging) raise NotImplementedError
-to trigger the BrowserFallbackExecutor's LLM agent path. The agent prompts
-below guide the agent through GS's UI. Once agent behavior is observed via
-Browserbase recordings, the deterministic Playwright scripts will be written
-to replace the stubs."""
+Search, login, inquiry, spec parsing — all deterministic Playwright scripts.
+Chat messaging uses deterministic scripts with LLM agent fallback via
+BrowserFallbackExecutor when selectors don't match."""
 
 from playwright.sync_api import Page
 
 from app.db.models.enums import Platform as PlatformEnum
+from app.services.platforms.globalsources.messaging import (
+    read_platform_messages as _read_messages,
+    send_platform_reply as _send_reply,
+)
 from app.services.platforms.globalsources.service import (
     login_globalsources,
     parse_product_specs,
@@ -74,36 +76,53 @@ inquiry to this supplier".
   cannot solve it after 2 attempts, call finish with FAILED."""
 
     messaging_agent_prompt = """\
-## GlobalSources message center guidance
+## GlobalSources chat guidance
 
-### Finding the message center
-- Navigate to the GlobalSources message center. Try these paths:
-  - Look for "Messages", "My Messages", or an envelope/chat icon in the \
-    top navigation bar.
-  - Try navigating directly to https://www.globalsources.com/messages/ \
-    or https://www.globalsources.com/user/messages/
-  - If neither works, look in "My Account" or "My GlobalSources" dropdown \
-    for a messaging link.
+The GS chat is a separate SPA at chat.globalsources.com — NOT on the main \
+GS website.
+
+### Chat URL (verified)
+
+Navigate to: https://chat.globalsources.com/buyer?p=eyJwbGF0Zm9ybUNvZGUiOiJOR1MtRCIsImxhbmciOiJlbnVzIn0=
+
+### Layout
+
+- Left sidebar: Chats / Contacts icons
+- Conversation list (280px panel): "All" / "Unread" tabs, then conversation \
+  items showing contact name, company, time, and preview
+- Chat panel (center): message history with input at the bottom
+- Right panel: supplier company details
+
+### CSS selectors (verified)
+
+- Conversation tabs: `.tool-tabs > div`
+- Conversation items: `.cursor-pointer .font-700` (contact name)
+- Message area: `.msg-content`
+- Message textarea: `.input-msg-text-area textarea` \
+  (placeholder: "Please type your message here...")
+- Send button: `.send-btn` (disabled when textarea is empty)
 
 ### Reading messages
-- Unread conversations are typically indicated by bold text, a badge/dot, \
-  or different background color.
-- Click a conversation to open it. The supplier/company name should be \
-  visible in the conversation header or sidebar.
-- Messages appear in chronological order — the latest is usually at the \
-  bottom.
-- Use `get url` after opening a conversation to capture its URL.
+
+- Click "All" or "Unread" tab to filter conversations.
+- Click a conversation to open it. Contact name is in the header.
+- Our messages appear on the right, supplier messages on the left.
+- Messages may include inquiry cards with product links.
 
 ### Sending replies
-- The message input is at the bottom of the conversation panel — look for \
-  a textarea, input field, or contenteditable div.
-- After typing the message, click the Send button (usually a blue/green \
-  button near the input area, or a paper plane icon).
-- Verify the message appears in the conversation before reporting SENT.
 
-### If login is required
-- If you see a login page, registration form, or "Sign in" prompt, call \
-  finish immediately with LOGIN_REQUIRED. Do NOT attempt to log in."""
+1. Click the conversation you want to reply to.
+2. Fill the textarea at the bottom of the chat panel using `fill`.
+3. The Send button becomes active once text is entered.
+4. Click the Send button or press Enter to send.
+5. Verify the message appears in the conversation.
+
+### Critical rules
+
+- **NEVER navigate away from chat.globalsources.com.** Everything happens \
+  within the chat SPA.
+- If you see a login page or redirect away from chat.globalsources.com, \
+  call finish with LOGIN_REQUIRED. Do NOT attempt to log in."""
 
     def search(self, query: str, page_size: int = 20) -> list[dict]:
         return search_suppliers(query, page_size=page_size)
@@ -125,13 +144,19 @@ inquiry to this supplier".
         return product_url.rstrip("/").split("/")[-1].replace(".htm", "")
 
     def read_platform_messages(self, page: Page) -> list[PlatformMessage]:
-        raise NotImplementedError(
-            "GS message reading not yet scripted — agent fallback will handle"
-        )
+        results = _read_messages(page)
+        return [
+            PlatformMessage(
+                supplier_name=r["supplier_name"],
+                message_text=r["message_text"],
+                conversation_url=r["conversation_url"],
+                product_url=r.get("product_url"),
+                sent_at=r.get("sent_at"),
+            )
+            for r in results
+        ]
 
     def send_platform_reply(
         self, page: Page, conversation_url: str, message: str
     ) -> bool:
-        raise NotImplementedError(
-            "GS reply sending not yet scripted — agent fallback will handle"
-        )
+        return _send_reply(page, conversation_url, message)
