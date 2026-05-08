@@ -6,18 +6,9 @@ See `SPEC.md` for the full technical specification.
 
 ## Prerequisites
 
-### Python 3.12
+### Docker
 
-Install via your package manager or [pyenv](https://github.com/pyenv/pyenv). This project uses [PDM](https://pdm-project.org/) for dependency management.
-
-### PostgreSQL
-
-A local Postgres instance with a database and user created:
-
-```sql
-CREATE USER agent WITH PASSWORD 'your_password';
-CREATE DATABASE "sourcingAgentDb" OWNER agent;
-```
+[Docker](https://docs.docker.com/get-docker/) and Docker Compose are required to run the system locally.
 
 ### AWS Bedrock
 
@@ -56,20 +47,25 @@ A [Browserbase](https://www.browserbase.com/) account for cloud browser sessions
 
 ## Setup
 
-```bash
-pdm install
-alembic upgrade head
-```
-
 Copy `.env.example` to `.env` and fill in all required values (see `app/base/config.py` for the full list).
 
 ## Running locally
 
 ```bash
-pdm run python -m app.main
+docker compose up --build
+```
+
+This starts Postgres and the app container. The entrypoint runs `alembic upgrade head` automatically before launching the scheduler.
+
+To run without rebuilding (pulls the latest published image):
+
+```bash
+docker compose up
 ```
 
 ## Testing
+
+Install dev dependencies with [PDM](https://pdm-project.org/): `pdm install`.
 
 ```bash
 pdm run pytest
