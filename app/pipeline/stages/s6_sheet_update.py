@@ -247,6 +247,43 @@ def sync_dashboard() -> None:
             ]
         )
 
+        # Avg supplier products searched / matched per source product
+        avg_searched = session.query(
+            sa_func.avg(
+                session.query(sa_func.count(SupplierProduct.id))
+                .filter(SupplierProduct.source_product_id == SourceProduct.id)
+                .correlate(SourceProduct)
+                .scalar_subquery()
+            )
+        ).scalar()
+        avg_matched = session.query(
+            sa_func.avg(
+                session.query(sa_func.count(SupplierProduct.id))
+                .filter(
+                    SupplierProduct.source_product_id == SourceProduct.id,
+                    SupplierProduct.match_status == "matched",
+                )
+                .correlate(SourceProduct)
+                .scalar_subquery()
+            )
+        ).scalar()
+        rows.append(
+            [
+                "Pipeline Summary",
+                "Avg Supplier Products Searched",
+                f"{avg_searched:.1f}" if avg_searched else "0",
+                "",
+            ]
+        )
+        rows.append(
+            [
+                "Pipeline Summary",
+                "Avg Supplier Products Matched",
+                f"{avg_matched:.1f}" if avg_matched else "0",
+                "",
+            ]
+        )
+
         # --- Thread Funnel ---
         state_counts = dict(
             session.query(SupplierThread.state, sa_func.count(SupplierThread.id))
