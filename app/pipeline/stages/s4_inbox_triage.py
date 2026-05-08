@@ -455,6 +455,7 @@ def triage_inbox() -> dict:
                     tag="Flagged",
                     preamble=f"Flagged for human review: {result.reason}",
                 )
+                gmail.archive_thread(gmail_thread_id)
 
             else:
                 counts["flagged"] += 1

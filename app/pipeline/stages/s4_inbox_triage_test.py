@@ -410,7 +410,7 @@ class TestTriageInbox:
             counts = triage_inbox()
 
         assert counts["flagged"] == 1
-        mock_gmail.archive_thread.assert_not_called()
+        mock_gmail.archive_thread.assert_called_once_with("t1")
 
     def test_does_not_duplicate_messages(self, supplier_thread):
         msg = _make_gmail_message(
