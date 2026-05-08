@@ -187,15 +187,11 @@ class TestPlatformProtocol:
     def test_send_inquiry_callable(self):
         assert callable(Platform().send_inquiry)
 
-    def test_read_platform_messages_raises_not_implemented(self):
-        p = Platform()
-        with pytest.raises(NotImplementedError):
-            p.read_platform_messages(None)
+    def test_read_platform_messages_callable(self):
+        assert callable(Platform().read_platform_messages)
 
-    def test_send_platform_reply_raises_not_implemented(self):
-        p = Platform()
-        with pytest.raises(NotImplementedError):
-            p.send_platform_reply(None, "http://example.com", "test")
+    def test_send_platform_reply_callable(self):
+        assert callable(Platform().send_platform_reply)
 
     def test_url_slug(self):
         p = Platform()
@@ -315,6 +311,70 @@ class TestParseProductSpecs:
         specs = parse_product_specs(html)
         assert "Product Information" in specs
         assert "Key Specifications" in specs
+
+
+class TestMessaging:
+    """Tests for the GS chat messaging module."""
+
+    def test_module_imports(self):
+        from app.services.platforms.globalsources import messaging
+
+        assert hasattr(messaging, "read_platform_messages")
+        assert hasattr(messaging, "send_platform_reply")
+        assert hasattr(messaging, "CHAT_URL")
+
+    def test_chat_url_points_to_gs_chat(self):
+        from app.services.platforms.globalsources.messaging import CHAT_URL
+
+        assert "chat.globalsources.com" in CHAT_URL
+
+    def test_js_extraction_scripts_exist(self):
+        from pathlib import Path
+
+        js_dir = Path(__file__).parent
+        assert (js_dir / "extract_conversations.js").exists()
+        assert (js_dir / "extract_chat_messages.js").exists()
+        assert (js_dir / "extract_supplier_name.js").exists()
+        assert (js_dir / "extract_inquiry_product.js").exists()
+
+    def test_js_scripts_are_valid_js(self):
+        """Each JS file should be a callable expression (starts with arrow fn)."""
+        from pathlib import Path
+
+        js_dir = Path(__file__).parent
+        for name in [
+            "extract_conversations.js",
+            "extract_chat_messages.js",
+            "extract_supplier_name.js",
+            "extract_inquiry_product.js",
+        ]:
+            content = (js_dir / name).read_text()
+            stripped = content.lstrip()
+            # Remove leading comment lines
+            lines = stripped.split("\n")
+            code_lines = [l for l in lines if not l.strip().startswith("//")]
+            first_code = "".join(code_lines).strip()
+            assert first_code.startswith(
+                "()"
+            ), f"{name} should be an arrow function expression"
+
+    def test_conversation_url_encoding(self):
+        """Verify the #contact= URL fragment round-trips correctly."""
+        from urllib.parse import quote, unquote
+
+        name = "Miko Wen"
+        url = f"https://chat.globalsources.com/buyer?p=abc#contact={quote(name)}"
+        assert "#contact=" in url
+        parsed_name = unquote(url.split("#contact=")[1])
+        assert parsed_name == name
+
+    def test_conversation_url_encoding_special_chars(self):
+        from urllib.parse import quote, unquote
+
+        name = "Zhang Wei (张伟)"
+        url = f"https://example.com#contact={quote(name)}"
+        parsed = unquote(url.split("#contact=")[1])
+        assert parsed == name
 
 
 if __name__ == "__main__":
