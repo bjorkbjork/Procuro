@@ -21,7 +21,7 @@ CREATE DATABASE "sourcingAgentDb" OWNER agent;
 
 ### AWS Bedrock
 
-An AWS account with Bedrock model access enabled for Claude Sonnet in your chosen region. You'll need an IAM user with `bedrock:InvokeModel` permissions.
+An AWS account with Bedrock model access enabled for the required models in your chosen region (Claude Sonnet/Haiku/Opus, plus Mistral, DeepSeek, Qwen for rate-limit pools). You'll need an IAM user with `bedrock:InvokeModel` permissions.
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
@@ -116,11 +116,13 @@ Add these required secrets to the same environment. See `app/base/config.py` for
 | `GMAIL_ACCOUNT` | `sourcing.agent@example.com` | Agent's Gmail address |
 | `BEDROCK_REGION` | `ap-southeast-2` | AWS Bedrock region |
 | `GOOGLE_REFRESH_TOKEN` | | Stored in Postgres after first OAuth flow |
-| `GOOGLE_SHEET_ID` | | Input/output spreadsheet ID |
+| `GOOGLE_SHEET_ID` | *(set in config)* | Input/output spreadsheet ID |
 | `MAINTAINER_EMAIL_ADDRESS` | | Captcha escalation email |
 | `MAX_WORKERS` | `3` | Concurrent pipeline threads |
+| `GOOGLE_TOTP_SECRET` | | Google TOTP secret for re-auth |
 | `SOURCING_INTERVAL_MINUTES` | `15` | Sourcing pipeline cron interval |
 | `NEGOTIATION_INTERVAL_MINUTES` | `30` | Negotiation pipeline cron interval |
+| `STALLED_OUTREACH_MINUTES` | `60` | Recovery threshold for stalled threads |
 
 ### 3. Tag a release
 

@@ -9,10 +9,9 @@ Autonomous agent that sources supplier quotes for Kogan products from GlobalSour
 ## Stack
 
 - **Python 3.12**, managed by PDM (`pdm add <pkg>`)
-- **PydanticAI + PydanticAI Graph** — agent framework and state machine
-- **Claude Sonnet via AWS Bedrock** — LLM for spec extraction, triage, negotiation
-- **Browserbase** — cloud browser sessions (no local Playwright)
-- **2captcha** — captcha solving
+- **PydanticAI** — agent framework (agents, tools, structured output)
+- **Claude + multi-model via AWS Bedrock** — LLM for spec extraction, triage, negotiation (Sonnet, Haiku, Opus + Mistral, DeepSeek, Qwen via model pools)
+- **Browserbase + Playwright** — cloud browser sessions via Browserbase, Playwright for page automation
 - **Gmail API** — inbox polling, reply, archive
 - **Google Sheets API** — live results output
 - **Postgres** — state persistence (SQLAlchemy, Alembic)

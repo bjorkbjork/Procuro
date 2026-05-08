@@ -14,7 +14,8 @@ Each subdirectory is a source marketplace (Kogan, etc.) — the retailer whose p
    ```python
    class Source:
        name = "newsource"          # must appear in the product URL for auto-matching
-       proxy_country = "US"        # Browserbase geo-proxy, or None
+       proxy_country = "US"        # Browserbase geo-proxy country, or None
+       proxy_city = "NEW YORK"     # Browserbase geo-proxy city, or None
        spec_selector = None        # CSS selector waited on before parsing, or None
 
        def parse_title(self, html: str) -> str: ...
