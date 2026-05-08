@@ -23,7 +23,7 @@ class TestExtractSpecs:
         html = FIXTURE_PATH.read_text()
         monkeypatch.setattr(
             "app.pipeline.stages.s1_spec_extraction.fetch_page_html",
-            lambda url, proxy_country=None: html,
+            lambda url, proxy_country=None, proxy_city=None: html,
         )
         product = extract_specs(TEST_URL)
         assert product.id is not None
@@ -35,7 +35,7 @@ class TestExtractSpecs:
         html = FIXTURE_PATH.read_text()
         monkeypatch.setattr(
             "app.pipeline.stages.s1_spec_extraction.fetch_page_html",
-            lambda url, proxy_country=None: html,
+            lambda url, proxy_country=None, proxy_city=None: html,
         )
         p1 = extract_specs(TEST_URL)
         p2 = extract_specs(TEST_URL)
