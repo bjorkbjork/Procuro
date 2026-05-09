@@ -47,7 +47,7 @@ from app.base.config import PROJECT_ROOT, model_settings, settings
 logfire.configure(
     token=settings.LOGFIRE_TOKEN or None, send_to_logfire="if-token-present"
 )
-logfire.instrument_pydantic_ai()
+logfire.instrument_pydantic_ai(include_binary_content=False)
 
 log = logging.getLogger(__name__)
 
