@@ -104,48 +104,42 @@ def _sourcing_pipeline_inner():
     from app.services.sheets import SheetsService
 
     pending = _run_stage("trigger_input_sheet", get_new_urls)
-    if not pending:
-        log.info("Sourcing pipeline: no new URLs")
-        return
 
-    sheets = SheetsService()
-    for item in pending:
-        sheets.update_input_status(item["row_index"], "processing")
+    if pending:
+        sheets = SheetsService()
+        for item in pending:
+            sheets.update_input_status(item["row_index"], "processing")
 
-    # Stage 1: extract specs — fan out across URLs
-    def _slug_from_url(url):
-        return url.rstrip("/").rsplit("/", 1)[-1]
+        def _slug_from_url(url):
+            return url.rstrip("/").rsplit("/", 1)[-1]
 
-    url_to_item = {item["url"]: item for item in pending}
-    s1_results = _fan_out(
-        "1_spec_extraction",
-        extract_specs,
-        [i["url"] for i in pending],
-        label=_slug_from_url,
-    )
+        url_to_item = {item["url"]: item for item in pending}
+        s1_results = _fan_out(
+            "1_spec_extraction",
+            extract_specs,
+            [i["url"] for i in pending],
+            label=_slug_from_url,
+        )
 
-    products = []
-    for url, result in s1_results:
-        item = url_to_item[url]
-        if result is not None:
-            sheets.update_input_status(item["row_index"], "done")
-            products.append(result)
-        else:
-            sheets.update_input_status(item["row_index"], "error")
+        products = []
+        for url, result in s1_results:
+            item = url_to_item[url]
+            if result is not None:
+                sheets.update_input_status(item["row_index"], "done")
+                products.append(result)
+            else:
+                sheets.update_input_status(item["row_index"], "error")
 
-    if not products:
-        return
+        if products:
+            slug_by_id = {p.id: p.slug for p in products}
+            _fan_out(
+                "2_supplier_search",
+                run_supplier_search,
+                [p.id for p in products],
+                label=lambda pid: slug_by_id[pid],
+            )
 
-    # Stage 2: supplier search — fan out across products
-    slug_by_id = {p.id: p.slug for p in products}
-    _fan_out(
-        "2_supplier_search",
-        run_supplier_search,
-        [p.id for p in products],
-        label=lambda pid: slug_by_id[pid],
-    )
-
-    # Stage 3: outreach (has its own internal threading per platform group)
+    # Stage 3 + 6: always run — there may be threads from previous runs
     _run_stage("3_outreach", send_outreach)
     _run_stage("6_sheet_update", update_sheet)
 
@@ -154,9 +148,10 @@ def recover_stalled():
     """Detect orphaned or stalled work across all pipeline stages and recover.
 
     Checks (in pipeline order):
-    1. supplier_products with match_status='pending' → re-run matching (stage 2)
-    2. source_products under match threshold → re-run full search loop (stage 2)
-    3. supplier_threads stuck in NEW → re-run outreach (stage 3)
+    1. source_products missing supplier search on any registered platform → run search (stage 2)
+    2. supplier_products with match_status='pending' → re-run matching (stage 2)
+    3. source_products under match threshold → re-run full search loop (stage 2)
+    4. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
     with _pipeline_lock:
         _recover_stalled_inner()
@@ -175,31 +170,44 @@ def _recover_stalled_inner():
     )
     from app.pipeline.stages.s3_outreach import send_outreach
 
-    # --- Stage 1→2 gap: source products with specs but no supplier products ------
-    with SessionLocal() as session:
-        searched_sids = {
-            row[0]
-            for row in session.query(SupplierProduct.source_product_id).distinct().all()
-        }
-        never_searched = (
-            session.query(SourceProduct.id)
-            .filter(
-                SourceProduct.specs.isnot(None),
-                ~SourceProduct.id.in_(searched_sids) if searched_sids else True,
-            )
-            .all()
-        )
-    never_searched_ids = [row[0] for row in never_searched]
+    # --- Stage 1→2 gap: products missing supplier search on any platform ---------
+    from app.services.platforms import get_platforms
 
-    if never_searched_ids:
+    platforms = get_platforms()
+    with SessionLocal() as session:
+        all_with_specs = {
+            row[0]
+            for row in session.query(SourceProduct.id)
+            .filter(SourceProduct.specs.isnot(None))
+            .all()
+        }
+        missing_coverage = set()
+        for platform in platforms:
+            searched_on_platform = {
+                row[0]
+                for row in session.query(SupplierProduct.source_product_id)
+                .filter(SupplierProduct.platform == platform.platform.value)
+                .distinct()
+                .all()
+            }
+            missing = all_with_specs - searched_on_platform
+            if missing:
+                log.info(
+                    "Recovery: %d products not yet searched on %s",
+                    len(missing),
+                    platform.platform.value,
+                )
+                missing_coverage.update(missing)
+
+    if missing_coverage:
         log.info(
-            "Recovery: %d source products with specs but no supplier search",
-            len(never_searched_ids),
+            "Recovery: %d products missing platform coverage — running supplier search",
+            len(missing_coverage),
         )
         _fan_out(
-            "recovery_search_new",
+            "recovery_search_missing_platforms",
             run_supplier_search,
-            never_searched_ids,
+            list(missing_coverage),
             max_workers=1,
             label=str,
         )

@@ -148,16 +148,19 @@ class TestSourcingPipeline:
         mock_sheets.update_input_status.assert_any_call(0, "processing")
         mock_sheets.update_input_status.assert_any_call(0, "done")
 
-    def test_skips_when_no_new_urls(self):
+    def test_still_runs_outreach_when_no_new_urls(self):
         mock_outreach = MagicMock()
+        mock_sheet = MagicMock()
 
         with (
             patch("app.pipeline.triggers.input_sheet.get_new_urls", return_value=[]),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+            patch("app.pipeline.stages.s6_sheet_update.update_sheet", mock_sheet),
         ):
             sourcing_pipeline()
 
-        mock_outreach.assert_not_called()
+        mock_outreach.assert_called_once()
+        mock_sheet.assert_called_once()
 
     def test_marks_error_and_continues_on_stage1_failure(self):
         bad_url = "https://kogan.com/bad/"
@@ -193,8 +196,9 @@ class TestSourcingPipeline:
         mock_sheets.update_input_status.assert_any_call(1, "done")
         mock_search.assert_called_once_with(10)
 
-    def test_skips_when_trigger_fails(self):
+    def test_still_runs_outreach_when_trigger_fails(self):
         mock_outreach = MagicMock()
+        mock_sheet = MagicMock()
 
         with (
             patch(
@@ -202,10 +206,12 @@ class TestSourcingPipeline:
                 side_effect=RuntimeError("sheets down"),
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+            patch("app.pipeline.stages.s6_sheet_update.update_sheet", mock_sheet),
         ):
             sourcing_pipeline()
 
-        mock_outreach.assert_not_called()
+        mock_outreach.assert_called_once()
+        mock_sheet.assert_called_once()
 
 
 class TestNegotiationPipeline:
@@ -264,6 +270,8 @@ class TestRecoverStalled:
     def test_dispatches_pending_to_match(self):
         mock_match = MagicMock(return_value=[])
         mock_outreach = MagicMock()
+        mock_platform = MagicMock()
+        mock_platform.platform.value = "alibaba"
 
         with (
             patch("app.db.database.SessionLocal") as mock_sl,
@@ -276,6 +284,10 @@ class TestRecoverStalled:
                 MagicMock(return_value=[]),
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+            patch(
+                "app.services.platforms.get_platforms",
+                return_value=[mock_platform],
+            ),
         ):
             session = MagicMock()
             call_count = {"n": 0}
@@ -284,11 +296,11 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    # Stage 1→2 gap: searched source product ids
-                    q.distinct.return_value.all.return_value = []
-                elif call_count["n"] == 2:
-                    # Stage 1→2 gap: never-searched source products
+                    # All products with specs
                     q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Per-platform searched ids (alibaba)
+                    q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 3:
                     # Pending: source_id=1
                     q.filter.return_value.distinct.return_value.all.return_value = [
@@ -312,6 +324,8 @@ class TestRecoverStalled:
 
     def test_dispatches_under_matched_to_search(self):
         mock_search = MagicMock(return_value=[])
+        mock_platform = MagicMock()
+        mock_platform.platform.value = "alibaba"
 
         with (
             patch("app.db.database.SessionLocal") as mock_sl,
@@ -324,6 +338,10 @@ class TestRecoverStalled:
                 mock_search,
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", MagicMock()),
+            patch(
+                "app.services.platforms.get_platforms",
+                return_value=[mock_platform],
+            ),
         ):
             session = MagicMock()
             call_count = {"n": 0}
@@ -332,11 +350,11 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    # Stage 1→2 gap: searched source product ids
-                    q.distinct.return_value.all.return_value = []
-                elif call_count["n"] == 2:
-                    # Stage 1→2 gap: never-searched source products
+                    # All products with specs
                     q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Per-platform searched ids (alibaba)
+                    q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 3:
                     # No pending
                     q.filter.return_value.distinct.return_value.all.return_value = []
@@ -364,6 +382,8 @@ class TestRecoverStalled:
 
     def test_skips_source_at_candidate_limit(self):
         mock_search = MagicMock(return_value=[])
+        mock_platform = MagicMock()
+        mock_platform.platform.value = "alibaba"
 
         with (
             patch("app.db.database.SessionLocal") as mock_sl,
@@ -376,6 +396,10 @@ class TestRecoverStalled:
                 mock_search,
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", MagicMock()),
+            patch(
+                "app.services.platforms.get_platforms",
+                return_value=[mock_platform],
+            ),
         ):
             session = MagicMock()
             call_count = {"n": 0}
@@ -384,11 +408,11 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    # Stage 1→2 gap: searched source product ids
-                    q.distinct.return_value.all.return_value = []
-                elif call_count["n"] == 2:
-                    # Stage 1→2 gap: never-searched source products
+                    # All products with specs
                     q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Per-platform searched ids (alibaba)
+                    q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 3:
                     q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 4:
@@ -413,6 +437,8 @@ class TestRecoverStalled:
 
     def test_dispatches_stalled_new_to_outreach(self):
         mock_outreach = MagicMock()
+        mock_platform = MagicMock()
+        mock_platform.platform.value = "alibaba"
 
         with (
             patch("app.db.database.SessionLocal") as mock_sl,
@@ -425,6 +451,10 @@ class TestRecoverStalled:
                 MagicMock(return_value=[]),
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
+            patch(
+                "app.services.platforms.get_platforms",
+                return_value=[mock_platform],
+            ),
         ):
             session = MagicMock()
             call_count = {"n": 0}
@@ -433,11 +463,11 @@ class TestRecoverStalled:
                 call_count["n"] += 1
                 q = MagicMock()
                 if call_count["n"] == 1:
-                    # Stage 1→2 gap: searched source product ids
-                    q.distinct.return_value.all.return_value = []
-                elif call_count["n"] == 2:
-                    # Stage 1→2 gap: never-searched source products
+                    # All products with specs
                     q.filter.return_value.all.return_value = []
+                elif call_count["n"] == 2:
+                    # Per-platform searched ids (alibaba)
+                    q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 3:
                     q.filter.return_value.distinct.return_value.all.return_value = []
                 elif call_count["n"] == 4:
