@@ -21,8 +21,9 @@ from app.base.scheduler import scheduler
 
 log = logging.getLogger(__name__)
 
-_sourcing_lock = threading.Lock()
-_recovery_lock = threading.Lock()
+_sourcing_lock = (
+    threading.Lock()
+)  # shared by sourcing + recovery (overlapping stages 2-3)
 _negotiation_lock = threading.Lock()
 _reporting_lock = threading.Lock()
 
@@ -155,13 +156,13 @@ def recover_stalled():
     3. source_products under match threshold → re-run full search loop (stage 2)
     4. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
-    if not _recovery_lock.acquire(blocking=False):
+    if not _sourcing_lock.acquire(blocking=False):
         log.info("Recovery: skipped — previous run still in progress")
         return
     try:
         _recover_stalled_inner()
     finally:
-        _recovery_lock.release()
+        _sourcing_lock.release()
 
 
 def _recover_stalled_inner():
@@ -360,7 +361,6 @@ def register_jobs():
         id="sourcing_pipeline",
         replace_existing=True,
         max_instances=1,
-        next_run_time=now,
     )
     scheduler.add_job(
         negotiation_pipeline,
@@ -389,7 +389,6 @@ def register_jobs():
         id="sync_reporting",
         replace_existing=True,
         max_instances=1,
-        next_run_time=now,
     )
     log.info(
         "Registered jobs — sourcing every %d min, negotiation every %d min (cron-aligned)",
