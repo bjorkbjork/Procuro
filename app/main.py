@@ -21,7 +21,10 @@ from app.base.scheduler import scheduler
 
 log = logging.getLogger(__name__)
 
-_pipeline_lock = threading.Lock()
+_sourcing_lock = threading.Lock()
+_recovery_lock = threading.Lock()
+_negotiation_lock = threading.Lock()
+_reporting_lock = threading.Lock()
 
 
 def _run_stage(stage_name: str, func, *args, **kwargs):
@@ -85,14 +88,13 @@ def _fan_out(stage_name: str, func, items, *, max_workers=None, label=None):
 
 
 def sourcing_pipeline():
-    if not _pipeline_lock.acquire(blocking=False):
+    if not _sourcing_lock.acquire(blocking=False):
         log.info("Sourcing pipeline: skipped — previous run still in progress")
         return
-
     try:
         _sourcing_pipeline_inner()
     finally:
-        _pipeline_lock.release()
+        _sourcing_lock.release()
 
 
 def _sourcing_pipeline_inner():
@@ -153,8 +155,13 @@ def recover_stalled():
     3. source_products under match threshold → re-run full search loop (stage 2)
     4. supplier_threads stuck in NEW → re-run outreach (stage 3)
     """
-    with _pipeline_lock:
+    if not _recovery_lock.acquire(blocking=False):
+        log.info("Recovery: skipped — previous run still in progress")
+        return
+    try:
         _recover_stalled_inner()
+    finally:
+        _recovery_lock.release()
 
 
 def _recover_stalled_inner():
@@ -286,6 +293,16 @@ def _recover_stalled_inner():
 
 
 def negotiation_pipeline():
+    if not _negotiation_lock.acquire(blocking=False):
+        log.info("Negotiation pipeline: skipped — previous run still in progress")
+        return
+    try:
+        _negotiation_pipeline_inner()
+    finally:
+        _negotiation_lock.release()
+
+
+def _negotiation_pipeline_inner():
     from app.pipeline.stages.s4_inbox_triage import triage_inbox
     from app.pipeline.stages.s5_negotiation import process_negotiations
     from app.pipeline.stages.s6_sheet_update import update_sheet
@@ -302,6 +319,16 @@ def negotiation_pipeline():
 
 def sync_reporting():
     """Sync all reporting tabs and check for anomalies. Cheap deterministic job."""
+    if not _reporting_lock.acquire(blocking=False):
+        log.info("Sync reporting: skipped — previous run still in progress")
+        return
+    try:
+        _sync_reporting_inner()
+    finally:
+        _reporting_lock.release()
+
+
+def _sync_reporting_inner():
     from app.pipeline.browser_executor import check_automation_failure_rate
     from app.pipeline.stages.s6_sheet_update import (
         sync_active_threads,
