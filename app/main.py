@@ -188,7 +188,8 @@ def _recover_stalled_inner():
             .filter(SourceProduct.specs.isnot(None))
             .all()
         }
-        missing_coverage = set()
+        # Build {product_id: [missing_platforms]} so we only search what's needed
+        missing_by_product = {}
         for platform in platforms:
             searched_on_platform = {
                 row[0]
@@ -204,17 +205,18 @@ def _recover_stalled_inner():
                     len(missing),
                     platform.platform.value,
                 )
-                missing_coverage.update(missing)
+                for pid in missing:
+                    missing_by_product.setdefault(pid, []).append(platform)
 
-    if missing_coverage:
+    if missing_by_product:
         log.info(
             "Recovery: %d products missing platform coverage — running supplier search",
-            len(missing_coverage),
+            len(missing_by_product),
         )
         _fan_out(
             "recovery_search_missing_platforms",
-            run_supplier_search,
-            list(missing_coverage),
+            lambda pid: run_supplier_search(pid, platforms=missing_by_product[pid]),
+            list(missing_by_product),
             max_workers=1,
             label=str,
         )
