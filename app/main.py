@@ -102,10 +102,10 @@ def sourcing_pipeline():
 
 
 def _sourcing_pipeline_inner():
-    from app.pipeline.triggers.input_sheet import get_new_urls
     from app.pipeline.stages.s1_spec_extraction import extract_specs
     from app.pipeline.stages.s2_supplier_search import run_supplier_search
     from app.pipeline.stages.s3_outreach import send_outreach
+    from app.pipeline.triggers.input_sheet import get_new_urls
     from app.services.sheets import SheetsService
 
     pending = _run_stage("trigger_input_sheet", get_new_urls)
@@ -167,7 +167,7 @@ def recover_stalled():
 
 
 def _recover_stalled_inner():
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     from app.db.database import SessionLocal
     from app.db.models.source_product import SourceProduct
@@ -369,9 +369,6 @@ def register_jobs():
         negotiation_pipeline,
         trigger="cron",
         minute=f"*/{negotiation_minutes}",
-        hour="7-18",
-        day_of_week="mon-fri",
-        timezone="Australia/Sydney",
         id="negotiation_pipeline",
         replace_existing=True,
         max_instances=1,
@@ -379,7 +376,7 @@ def register_jobs():
     scheduler.add_job(
         recover_stalled,
         trigger="cron",
-        minute=f"*/{sourcing_minutes}",
+        minute=f"*/{sourcing_minutes*2}",
         id="recover_stalled",
         replace_existing=True,
         max_instances=1,
@@ -394,7 +391,7 @@ def register_jobs():
         max_instances=1,
     )
     log.info(
-        "Registered jobs — sourcing every %d min, negotiation every %d min (cron-aligned)",
+        "Registered jobs",
         sourcing_minutes,
         negotiation_minutes,
     )
