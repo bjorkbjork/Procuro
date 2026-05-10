@@ -4,6 +4,21 @@ Autonomous agent that sources supplier quotes for Kogan products from GlobalSour
 
 See `SPEC.md` for the full technical specification.
 
+## Exploring the Architecture
+
+For a detailed walkthrough of the architecture, pipeline stages, and complexity hotspots, see [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
+
+An interactive knowledge graph is also included, built with [Understand Anything](https://github.com/Lum1104/Understand-Anything). It visualizes every file, module, and dependency as a navigable graph — making it easy to see how the pipeline stages, platform adapters, and LLM agents connect. A 14-step guided tour walks through the system end-to-end, from entry point to CI/CD.
+
+To launch the dashboard locally in Claude Code:
+
+```
+/plugin marketplace add Lum1104/Understand-Anything
+/plugin install understand-anything
+/reload-plugins
+/understand-dashboard
+```
+
 ## Prerequisites
 
 ### Docker
@@ -69,21 +84,6 @@ Install dev dependencies with [PDM](https://pdm-project.org/): `pdm install`.
 
 ```bash
 pdm run pytest
-```
-
-## Exploring the Architecture
-
-For a detailed walkthrough of the architecture, pipeline stages, and complexity hotspots, see [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
-
-An interactive knowledge graph is also included, built with [Understand Anything](https://github.com/Lum1104/Understand-Anything). It visualizes every file, module, and dependency as a navigable graph — making it easy to see how the pipeline stages, platform adapters, and LLM agents connect. A 14-step guided tour walks through the system end-to-end, from entry point to CI/CD.
-
-To launch the dashboard locally in Claude Code:
-
-```
-/plugin marketplace add Lum1104/Understand-Anything
-/plugin install understand-anything
-/reload-plugins
-/understand-dashboard
 ```
 
 ## Deployment
