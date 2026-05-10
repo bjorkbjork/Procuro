@@ -66,7 +66,21 @@ def search_suppliers(
 
     with BrowserSession(proxy_country="AU", proxy_city="SYDNEY") as browser:
         browser.page.goto(LANDING_URL, timeout=60_000, wait_until="domcontentloaded")
-        data = browser.page.evaluate(_JS_SEARCH, payload)
+        browser.page.wait_for_load_state("load", timeout=60_000)
+
+        # Incapsula challenge may redirect after load, destroying the JS context.
+        # Catch that, wait for the real page, then retry in the same session.
+        for _attempt in range(3):
+            try:
+                data = browser.page.evaluate(_JS_SEARCH, payload)
+                break
+            except PlaywrightError as exc:
+                if "Execution context was destroyed" not in str(exc):
+                    raise
+                log.info("Incapsula redirect detected, waiting for real page")
+                browser.page.wait_for_load_state("load", timeout=60_000)
+        else:
+            raise PlaywrightError("GS search: context destroyed on every attempt")
 
     results = parse_search_response(data)
 
