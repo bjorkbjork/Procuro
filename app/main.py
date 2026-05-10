@@ -312,7 +312,9 @@ def _negotiation_pipeline_inner():
 
     counts = _run_stage("4_inbox_triage", triage_inbox)
 
-    has_replies = counts and counts.get("supplier_reply", 0) > 0
+    has_replies = counts and (
+        counts.get("supplier_reply", 0) > 0 or counts.get("platform_messages", 0) > 0
+    )
     if has_replies:
         _run_stage("5_negotiation", process_negotiations)
     else:
