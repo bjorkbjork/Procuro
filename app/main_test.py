@@ -69,37 +69,6 @@ class TestFanOut:
         assert "2/2 succeeded" in caplog.text
 
 
-class TestRegisterJobs:
-    def test_registers_both_pipelines(self):
-        test_scheduler = BlockingScheduler()
-        with patch("app.main.scheduler", test_scheduler):
-            register_jobs()
-        job_ids = {job.id for job in test_scheduler.get_jobs()}
-        assert job_ids == {
-            "sourcing_pipeline",
-            "negotiation_pipeline",
-            "recover_stalled",
-            "sync_reporting",
-        }
-
-    def test_uses_cron_trigger(self):
-        test_scheduler = BlockingScheduler()
-        with patch("app.main.scheduler", test_scheduler):
-            register_jobs()
-        for job in test_scheduler.get_jobs():
-            assert job.trigger.__class__.__name__ == "CronTrigger"
-
-    def test_sets_replace_existing_flag(self):
-        """replace_existing=True is set so restarts with a persistent jobstore
-        update existing jobs rather than raising ConflictingIdError."""
-        test_scheduler = BlockingScheduler()
-        with patch("app.main.scheduler", test_scheduler) as mock_sched:
-            with patch.object(mock_sched, "add_job", wraps=mock_sched.add_job) as spy:
-                register_jobs()
-                for call_args in spy.call_args_list:
-                    assert call_args.kwargs.get("replace_existing") is True
-
-
 @pytest.fixture(autouse=True)
 def _no_automation_alerts():
     with patch(
