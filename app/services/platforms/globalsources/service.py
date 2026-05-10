@@ -23,12 +23,21 @@ LANDING_URL = "https://www.globalsources.com"
 
 _JS_SEARCH = """\
 async (payload) => {
-    const resp = await fetch('%s', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'lang': 'enus'},
-        body: JSON.stringify(payload)
-    });
-    return resp.json();
+    for (let i = 0; i < 5; i++) {
+        const resp = await fetch('%s', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'lang': 'enus'},
+            body: JSON.stringify(payload)
+        });
+        const text = await resp.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            // FIXME: Incapsula bot challenge may not have cleared yet — wait and retry
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    }
+    throw new Error('GS search API returned non-JSON after 5 retries');
 }
 """ % SEARCH_PATH
 
