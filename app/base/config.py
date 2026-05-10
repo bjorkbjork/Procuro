@@ -103,6 +103,10 @@ class ModelSettings(BaseSettings):
         ("deepseek.v3.2", 100),
         ("mistral.mistral-large-3-675b-instruct", 100),
     ]
+    # Negotiation agent receives PDF attachments — only models supporting documents
+    NEGOTIATION_POOL: list[tuple[str, int]] = [
+        ("au.anthropic.claude-sonnet-4-6", 10),
+    ]
     # Browser agents send screenshots — excludes models with low image limits
     BROWSER_POOL: list[tuple[str, int]] = [
         ("amazon.nova-pro-v1:0", 100),
