@@ -37,6 +37,7 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text)
 
 
+@stamina.retry(on=PlaywrightError, attempts=3, timeout=300)
 def search_suppliers(
     query: str,
     page: int = 1,
@@ -55,7 +56,7 @@ def search_suppliers(
     }
 
     with BrowserSession(proxy_country="AU", proxy_city="SYDNEY") as browser:
-        browser.page.goto(LANDING_URL, wait_until="networkidle")
+        browser.page.goto(LANDING_URL, timeout=60_000, wait_until="commit")
         data = browser.page.evaluate(_JS_SEARCH, payload)
 
     results = parse_search_response(data)
