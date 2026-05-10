@@ -248,25 +248,26 @@ def sync_dashboard() -> None:
         )
 
         # Avg supplier products searched / matched per source product
-        avg_searched = session.query(
-            sa_func.avg(
-                session.query(sa_func.count(SupplierProduct.id))
-                .filter(SupplierProduct.source_product_id == SourceProduct.id)
-                .correlate(SourceProduct)
-                .scalar_subquery()
+        searched_per_product = (
+            session.query(
+                SupplierProduct.source_product_id,
+                sa_func.count(SupplierProduct.id).label("cnt"),
             )
-        ).scalar()
-        avg_matched = session.query(
-            sa_func.avg(
-                session.query(sa_func.count(SupplierProduct.id))
-                .filter(
-                    SupplierProduct.source_product_id == SourceProduct.id,
-                    SupplierProduct.match_status == "matched",
-                )
-                .correlate(SourceProduct)
-                .scalar_subquery()
+            .group_by(SupplierProduct.source_product_id)
+            .subquery()
+        )
+        avg_searched = session.query(sa_func.avg(searched_per_product.c.cnt)).scalar()
+
+        matched_per_product = (
+            session.query(
+                SupplierProduct.source_product_id,
+                sa_func.count(SupplierProduct.id).label("cnt"),
             )
-        ).scalar()
+            .filter(SupplierProduct.match_status == "matched")
+            .group_by(SupplierProduct.source_product_id)
+            .subquery()
+        )
+        avg_matched = session.query(sa_func.avg(matched_per_product.c.cnt)).scalar()
         rows.append(
             [
                 "Pipeline Summary",
