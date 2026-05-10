@@ -56,7 +56,7 @@ def search_suppliers(
     }
 
     with BrowserSession(proxy_country="AU", proxy_city="SYDNEY") as browser:
-        browser.page.goto(LANDING_URL, timeout=60_000, wait_until="commit")
+        browser.page.goto(LANDING_URL, timeout=60_000, wait_until="domcontentloaded")
         data = browser.page.evaluate(_JS_SEARCH, payload)
 
     results = parse_search_response(data)
