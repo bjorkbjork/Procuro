@@ -60,6 +60,7 @@ def _build_row(thread: SupplierThread) -> dict:
             if first_outbound and first_outbound.sent_at
             else ""
         ),
+        "platform": thread.supplier_product.platform,
     }
 
 
@@ -72,7 +73,6 @@ def update_sheet() -> int:
     Returns the number of rows upserted.
     """
     sheets = SheetsService()
-    count = 0
 
     with SessionLocal() as session:
         threads = (
@@ -82,26 +82,26 @@ def update_sheet() -> int:
             .all()
         )
 
+        all_rows = []
         for thread in threads:
             try:
-                row = _build_row(thread)
-                sheets.upsert_output_row(row)
-                count += 1
+                all_rows.append(_build_row(thread))
             except Exception:
                 log.exception(
-                    "Failed to update sheet for thread %d (%s)",
+                    "Failed to build row for thread %d (%s)",
                     thread.id,
                     thread.supplier.name,
                 )
 
-    log.info("Sheet update complete: %d rows upserted", count)
+    sheets.sync_output_rows(all_rows)
+    log.info("Sheet update complete: %d rows synced", len(all_rows))
 
     try:
         _sync_match_results(sheets)
     except Exception:
         log.exception("Failed to sync match results tab")
 
-    return count
+    return len(all_rows)
 
 
 def _sync_match_results(sheets: SheetsService) -> None:

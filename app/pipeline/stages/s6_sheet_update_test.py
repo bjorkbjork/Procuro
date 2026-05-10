@@ -160,6 +160,7 @@ class TestBuildRow:
         assert row["lead_time"] == "30-45 days"
         assert "gmail_thread_abc" in row["email_chain"]
         assert row["initial_outreach_date"] != ""
+        assert row["platform"] == "alibaba"
 
     def test_without_quote(self, thread_without_quote):
         row = _build_row(thread_without_quote)
@@ -186,10 +187,8 @@ class TestUpdateSheet:
             count = update_sheet()
 
         assert count >= 1
-        mock_sheets.upsert_output_row.assert_called()
-        rows_written = [
-            call.args[0] for call in mock_sheets.upsert_output_row.call_args_list
-        ]
+        mock_sheets.sync_output_rows.assert_called_once()
+        rows_written = mock_sheets.sync_output_rows.call_args[0][0]
         slugs = [r["source_slug"] for r in rows_written]
         assert "test-sheet-update" in slugs
 
@@ -240,9 +239,7 @@ class TestUpdateSheet:
         ):
             update_sheet()
 
-        rows_written = [
-            call.args[0] for call in mock_sheets.upsert_output_row.call_args_list
-        ]
+        rows_written = mock_sheets.sync_output_rows.call_args[0][0]
         slugs = [r["source_slug"] for r in rows_written]
         assert "test-new-skip" not in slugs
 
@@ -253,17 +250,16 @@ class TestUpdateSheet:
             session.query(SourceProduct).filter_by(id=src_id).delete()
             session.commit()
 
-    def test_handles_upsert_error_gracefully(self, thread_with_quote):
+    def test_handles_sync_error_gracefully(self, thread_with_quote):
         mock_sheets = MagicMock()
-        mock_sheets.upsert_output_row.side_effect = RuntimeError("Sheets API error")
+        mock_sheets.sync_output_rows.side_effect = RuntimeError("Sheets API error")
 
         with patch(
             "app.pipeline.stages.s6_sheet_update.SheetsService",
             return_value=mock_sheets,
         ):
-            count = update_sheet()
-
-        assert count == 0
+            with pytest.raises(RuntimeError):
+                update_sheet()
 
     def test_empty_db(self):
         mock_sheets = MagicMock()
@@ -273,5 +269,5 @@ class TestUpdateSheet:
         ):
             count = update_sheet()
 
-        # May be 0 or may pick up other test fixtures, but shouldn't crash
-        mock_sheets.upsert_output_row.assert_not_called() if count == 0 else None
+        assert count == 0
+        mock_sheets.sync_output_rows.assert_called_once_with([])

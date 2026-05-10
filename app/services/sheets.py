@@ -24,6 +24,7 @@ OUTPUT_COLUMNS = {
     "email_chain": 7,
     "last_updated_date": 8,
     "initial_outreach_date": 9,
+    "platform": 10,
 }
 
 MATCH_RESULTS_COLUMNS = {
@@ -154,7 +155,7 @@ class SheetsService:
         result = (
             self.service.spreadsheets()
             .values()
-            .get(spreadsheetId=self.spreadsheet_id, range=f"{OUTPUT_TAB}!A2:J")
+            .get(spreadsheetId=self.spreadsheet_id, range=f"{OUTPUT_TAB}!A2:K")
             .execute()
         )
         rows = result.get("values", [])
@@ -176,24 +177,9 @@ class SheetsService:
         """Write columns A:J for a given sheet row (1-indexed)."""
         self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
-            range=f"{OUTPUT_TAB}!A{sheet_row}:J{sheet_row}",
+            range=f"{OUTPUT_TAB}!A{sheet_row}:K{sheet_row}",
             valueInputOption="RAW",
-            body={
-                "values": [
-                    [
-                        data.get("source_product_title", ""),
-                        data.get("source_link", ""),
-                        data.get("source_slug", ""),
-                        data.get("supplier_name", ""),
-                        data.get("best_price_usd_fob", ""),
-                        data.get("moq", ""),
-                        data.get("lead_time", ""),
-                        data.get("email_chain", ""),
-                        data.get("last_updated_date", ""),
-                        data.get("initial_outreach_date", ""),
-                    ]
-                ]
-            },
+            body={"values": [[data.get(k, "") for k in OUTPUT_COLUMNS]]},
         ).execute()
 
     def upsert_output_row(self, data: dict) -> None:
@@ -208,6 +194,38 @@ class SheetsService:
 
         sheet_row = len(rows) + 2
         self._write_output_row(sheet_row, data)
+
+    def sync_output_rows(self, all_data: list[dict]) -> None:
+        """Read sheet once, upsert all rows in memory, write back in one call."""
+        existing = self.read_output_rows()
+        index: dict[tuple[str, str], int] = {}
+        for i, row in enumerate(existing):
+            index[(row["source_slug"], row["supplier_name"])] = i
+
+        keys = list(OUTPUT_COLUMNS.keys())
+        rows = [[row.get(k, "") for k in keys] for row in existing]
+
+        for data in all_data:
+            values = [data.get(k, "") for k in keys]
+            key = (data.get("source_slug", ""), data.get("supplier_name", ""))
+            if key in index:
+                rows[index[key]] = values
+            else:
+                index[key] = len(rows)
+                rows.append(values)
+
+        last_col = chr(64 + len(keys))
+        self.service.spreadsheets().values().clear(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{OUTPUT_TAB}!A2:{last_col}",
+        ).execute()
+        if rows:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{OUTPUT_TAB}!A2:{last_col}{len(rows) + 1}",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
 
     def _ensure_tab(self, tab_name: str, headers: list[str] | None = None) -> None:
         """Create a tab if it doesn't exist. Optionally write a header row."""
