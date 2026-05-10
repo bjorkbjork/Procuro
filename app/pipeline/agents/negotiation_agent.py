@@ -71,6 +71,13 @@ or close the thread.
   them but continue negotiating. Major deviations (e.g. wrong panel type, wrong
   size) — return action=close with a polite decline as reply_text.
 
+## Formatting
+
+Write reply_text as a plain text email. Do NOT use markdown formatting — no
+asterisks, no bold, no bullet points, no headers, no lists with dashes. Write
+in natural flowing sentences and paragraphs like a real person would type in an
+email client. Keep it concise — 3-5 sentences per reply is ideal.
+
 ## Output
 
 Always extract any pricing information the supplier mentions into extracted_quote.
@@ -121,7 +128,7 @@ class NegotiationResult(BaseModel):
 
 
 negotiation_agent = Agent(
-    model=get_model(model_settings.MODERATE),
+    model=get_model(model_settings.MODERATE, pool=model_settings.NEGOTIATION_POOL),
     name="negotiation_agent",
     system_prompt=SYSTEM_PROMPT,
     output_type=NegotiationResult,
