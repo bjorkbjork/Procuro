@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 from pydantic_ai.messages import (
+    BinaryContent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -148,17 +149,24 @@ def negotiate(
     latest_supplier_message: str,
     negotiation_rounds: int,
     product_title: str,
+    attachments: list[BinaryContent] | None = None,
 ) -> NegotiationResult:
     """Run the negotiation agent on a supplier conversation.
 
     The message_history should contain the full conversation so far
     (built via build_message_history). The latest_supplier_message is
-    passed as the current user prompt.
+    passed as the current user prompt. If the supplier attached PDFs,
+    they are passed as BinaryContent alongside the text.
     """
-    prompt = (
+    text = (
         f"[Round {negotiation_rounds + 1} — Product: {product_title}]\n\n"
         f"{latest_supplier_message}"
     )
+
+    if attachments:
+        prompt = [text, *attachments]
+    else:
+        prompt = text
 
     result = negotiation_agent.run_sync(
         prompt,

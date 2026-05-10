@@ -53,6 +53,17 @@ class GmailService:
             .execute()
         )
 
+    def get_attachment(self, message_id: str, attachment_id: str) -> bytes:
+        """Fetch attachment bytes from Gmail API."""
+        result = (
+            self.service.users()
+            .messages()
+            .attachments()
+            .get(userId="me", messageId=message_id, id=attachment_id)
+            .execute()
+        )
+        return base64.urlsafe_b64decode(result["data"])
+
     def archive_thread(self, thread_id: str) -> None:
         self.service.users().threads().modify(
             userId="me",

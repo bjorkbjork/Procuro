@@ -18,6 +18,7 @@ from app.pipeline.stages.s4_inbox_triage import (
     TriageResult,
     _add_ignore_email,
     _extract_body,
+    _extract_pdf_attachments,
     _extract_sender,
     _extract_subject,
     _get_ignore_emails,
@@ -104,6 +105,111 @@ class TestIsNoReplySender:
 
     def test_normal_sender(self):
         assert not _is_no_reply_sender("John", "john@example.com")
+
+
+class TestExtractPdfAttachments:
+    def test_extracts_pdf_metadata(self):
+        msg = {
+            "id": "msg123",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "text/plain",
+                        "body": {"data": "aGVsbG8=", "size": 5},
+                    },
+                    {
+                        "mimeType": "application/pdf",
+                        "filename": "quote.pdf",
+                        "body": {
+                            "attachmentId": "ATT_ID_1",
+                            "size": 54321,
+                        },
+                    },
+                ],
+            },
+        }
+        result = _extract_pdf_attachments(msg)
+        assert result == [
+            {
+                "filename": "quote.pdf",
+                "mime_type": "application/pdf",
+                "size": 54321,
+                "attachment_id": "ATT_ID_1",
+                "gmail_message_id": "msg123",
+            }
+        ]
+
+    def test_returns_none_when_no_attachments(self):
+        msg = _make_gmail_message("a@b.com", "subj", "body")
+        assert _extract_pdf_attachments(msg) is None
+
+    def test_ignores_non_pdf_attachments(self):
+        msg = {
+            "id": "msg456",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "filename": "data.xlsx",
+                        "body": {"attachmentId": "ATT_XLSX", "size": 9999},
+                    },
+                    {
+                        "mimeType": "image/png",
+                        "filename": "logo.png",
+                        "body": {"attachmentId": "ATT_PNG", "size": 1234},
+                    },
+                ],
+            },
+        }
+        assert _extract_pdf_attachments(msg) is None
+
+    def test_extracts_nested_pdf(self):
+        msg = {
+            "id": "msg789",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "multipart/alternative",
+                        "parts": [
+                            {"mimeType": "text/plain", "body": {"data": "aGk="}},
+                        ],
+                    },
+                    {
+                        "mimeType": "application/pdf",
+                        "filename": "prices.pdf",
+                        "body": {"attachmentId": "ATT_NESTED", "size": 10000},
+                    },
+                ],
+            },
+        }
+        result = _extract_pdf_attachments(msg)
+        assert len(result) == 1
+        assert result[0]["filename"] == "prices.pdf"
+
+    def test_multiple_pdfs(self):
+        msg = {
+            "id": "msg_multi",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "application/pdf",
+                        "filename": "quote1.pdf",
+                        "body": {"attachmentId": "ATT1", "size": 100},
+                    },
+                    {
+                        "mimeType": "application/pdf",
+                        "filename": "quote2.pdf",
+                        "body": {"attachmentId": "ATT2", "size": 200},
+                    },
+                ],
+            },
+        }
+        result = _extract_pdf_attachments(msg)
+        assert len(result) == 2
 
 
 class TestIsPlatformNotification:

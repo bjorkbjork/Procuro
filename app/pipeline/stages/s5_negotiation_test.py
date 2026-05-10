@@ -626,3 +626,84 @@ class TestProcessNegotiations:
 
         assert counts.get("error", 0) == 1
         assert counts.get("replied", 0) == 1
+
+
+# ---------------------------------------------------------------------------
+# _fetch_pdf_attachments
+# ---------------------------------------------------------------------------
+
+
+class TestFetchPdfAttachments:
+    def test_returns_none_when_no_attachments(self):
+        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="Hello",
+            attachments=None,
+        )
+        assert _fetch_pdf_attachments(msg) is None
+
+    def test_fetches_pdf_bytes(self):
+        from pydantic_ai.messages import BinaryContent
+
+        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="See attached quote",
+            attachments=[
+                {
+                    "filename": "quote.pdf",
+                    "mime_type": "application/pdf",
+                    "size": 1000,
+                    "attachment_id": "ATT1",
+                    "gmail_message_id": "msg_abc",
+                }
+            ],
+        )
+        mock_gmail = MagicMock()
+        mock_gmail.get_attachment.return_value = b"%PDF-fake-content"
+
+        with patch(
+            "app.pipeline.stages.s5_negotiation.GmailService",
+            return_value=mock_gmail,
+        ):
+            result = _fetch_pdf_attachments(msg)
+
+        assert result is not None
+        assert len(result) == 1
+        assert isinstance(result[0], BinaryContent)
+        assert result[0].data == b"%PDF-fake-content"
+        assert result[0].media_type == "application/pdf"
+        mock_gmail.get_attachment.assert_called_once_with("msg_abc", "ATT1")
+
+    def test_skips_failed_download(self):
+        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="See attached",
+            attachments=[
+                {
+                    "filename": "broken.pdf",
+                    "mime_type": "application/pdf",
+                    "size": 500,
+                    "attachment_id": "ATT_BROKEN",
+                    "gmail_message_id": "msg_xyz",
+                }
+            ],
+        )
+        mock_gmail = MagicMock()
+        mock_gmail.get_attachment.side_effect = RuntimeError("API error")
+
+        with patch(
+            "app.pipeline.stages.s5_negotiation.GmailService",
+            return_value=mock_gmail,
+        ):
+            result = _fetch_pdf_attachments(msg)
+
+        assert result is None
