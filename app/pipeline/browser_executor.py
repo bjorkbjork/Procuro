@@ -149,13 +149,8 @@ class BrowserFallbackExecutor(BatchExecutor[T, R]):
             bb.sessions.update(session_id, status="REQUEST_RELEASE")
 
             if fb.login_required:
-                record_automation_event(
-                    self.stage,
-                    self.action,
-                    "failed",
-                    self.get_thread_id(item),
-                    f"login_required: {det_exc}",
-                )
+                # No event recorded — caller will retry after re-auth.
+                # Only the final outcome (success or exhausted retries) gets recorded.
                 return _AttemptResult(item=item, result=None, login_required=True)
 
             if fb.success:
