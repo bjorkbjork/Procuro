@@ -295,6 +295,35 @@ def _recover_stalled_inner():
         log.info("Recovery: %d threads stalled in NEW", stalled)
         _run_stage("recovery_outreach", send_outreach)
 
+    # --- Stage 4→5 gap: triaged but not negotiated ------------------------------
+    negotiation_cutoff = datetime.now(timezone.utc) - timedelta(
+        minutes=scheduler_settings.STALLED_NEGOTIATION_MINUTES
+    )
+    with SessionLocal() as session:
+        stalled_negotiation = (
+            session.query(SupplierThread)
+            .filter(
+                SupplierThread.state.in_(
+                    ["AWAITING_REPLY", "SPEC_CHECK_PASS", "NEGOTIATING"]
+                ),
+                SupplierThread.respond_after.is_(None),
+                SupplierThread.last_updated < negotiation_cutoff,
+            )
+            .all()
+        )
+        stalled_ids = [t.id for t in stalled_negotiation]
+
+    if stalled_ids:
+        log.warning(
+            "Recovery: %d threads triaged but not negotiated (>%d min): %s",
+            len(stalled_ids),
+            scheduler_settings.STALLED_NEGOTIATION_MINUTES,
+            stalled_ids,
+        )
+        from app.pipeline.stages.s5_negotiation import process_negotiations
+
+        _run_stage("recovery_negotiation", process_negotiations)
+
 
 def negotiation_pipeline():
     if not _negotiation_lock.acquire(blocking=False):

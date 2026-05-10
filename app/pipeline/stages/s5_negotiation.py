@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from app.base.config import settings
+from app.base.config import scheduler_settings, settings
 from app.db.database import SessionLocal
 from app.db.models.message import Message
 from app.db.models.quote import Quote
@@ -87,7 +87,9 @@ def _get_ready_threads() -> list[int]:
         threads = (
             session.query(SupplierThread)
             .filter(
-                SupplierThread.state.in_(["AWAITING_REPLY", "NEGOTIATING"]),
+                SupplierThread.state.in_(
+                    ["AWAITING_REPLY", "SPEC_CHECK_PASS", "NEGOTIATING"]
+                ),
                 (SupplierThread.respond_after.is_(None))
                 | (SupplierThread.respond_after <= now),
             )
@@ -97,7 +99,11 @@ def _get_ready_threads() -> list[int]:
 
 
 def _run_spec_check(thread_id: int) -> bool:
-    """Run spec check on the first supplier reply. Returns True if pass."""
+    """Run spec check on the first supplier reply. Returns True if pass.
+
+    Does NOT commit state changes — the caller is responsible for setting
+    the final state after the full negotiation decision succeeds.
+    """
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         source = thread.source_product
@@ -127,12 +133,6 @@ def _run_spec_check(thread_id: int) -> bool:
             result.reasoning[:100],
         )
 
-        if result.is_match:
-            thread.state = "SPEC_CHECK_PASS"
-        else:
-            thread.state = "SPEC_CHECK_FAIL"
-        session.commit()
-
         return result.is_match
 
 
@@ -153,6 +153,24 @@ def _record_quote(
                 lead_time=lead_time,
             )
         )
+        session.commit()
+
+
+def _record_negotiation_failure(thread_id: int) -> None:
+    """Increment failure counter; move to UNPROCESSABLE if over threshold."""
+    max_failures = scheduler_settings.MAX_NEGOTIATION_FAILURES
+    with SessionLocal() as session:
+        thread = session.get(SupplierThread, thread_id)
+        if not thread:
+            return
+        thread.negotiation_failures = (thread.negotiation_failures or 0) + 1
+        if thread.negotiation_failures >= max_failures:
+            log.warning(
+                "Thread %d failed negotiation %d times — marking UNPROCESSABLE",
+                thread_id,
+                thread.negotiation_failures,
+            )
+            thread.state = "UNPROCESSABLE"
         session.commit()
 
 
@@ -196,7 +214,12 @@ class NegotiationDecision:
 
 
 def _negotiate_thread(thread_id: int) -> NegotiationDecision:
-    """Run negotiation for one thread. Updates DB state, returns decision."""
+    """Run negotiation for one thread.
+
+    State changes are committed only after the full decision succeeds —
+    if anything crashes mid-way, the thread stays in its original state
+    and will be retried on the next run.
+    """
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         if not thread:
@@ -223,6 +246,7 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
             with SessionLocal() as session:
                 thread = session.get(SupplierThread, thread_id)
                 thread.state = "CLOSED"
+                thread.negotiation_failures = 0
                 session.commit()
             return NegotiationDecision(
                 thread_id=thread_id,
@@ -263,9 +287,12 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
     eq = result.extracted_quote
     _record_quote(thread_id, eq.price_usd, eq.moq, eq.lead_time)
 
-    if result.action == NegotiationAction.REPLY:
-        with SessionLocal() as session:
-            thread = session.get(SupplierThread, thread_id)
+    # Single commit for all state changes after the decision succeeds
+    with SessionLocal() as session:
+        thread = session.get(SupplierThread, thread_id)
+        thread.negotiation_failures = 0
+
+        if result.action == NegotiationAction.REPLY:
             thread.state = "NEGOTIATING"
             thread.negotiation_rounds = negotiation_rounds + 1
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
@@ -273,32 +300,29 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
                 REPLY_DELAY_MAX_HOURS,
             )
             session.commit()
-        return NegotiationDecision(
-            thread_id=thread_id, status="replied", reply_text=result.reply_text
-        )
+            return NegotiationDecision(
+                thread_id=thread_id, status="replied", reply_text=result.reply_text
+            )
 
-    elif result.action == NegotiationAction.SILENCE:
-        with SessionLocal() as session:
-            thread = session.get(SupplierThread, thread_id)
+        elif result.action == NegotiationAction.SILENCE:
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
                 SILENCE_DELAY_MIN_HOURS,
                 SILENCE_DELAY_MAX_HOURS,
             )
             session.commit()
-        return NegotiationDecision(thread_id=thread_id, status="silence")
+            return NegotiationDecision(thread_id=thread_id, status="silence")
 
-    elif result.action == NegotiationAction.CLOSE:
-        with SessionLocal() as session:
-            thread = session.get(SupplierThread, thread_id)
+        elif result.action == NegotiationAction.CLOSE:
             if eq.price_usd is not None:
                 thread.state = "FINAL_PRICE_LOGGED"
             else:
                 thread.state = "CLOSED"
             session.commit()
-        return NegotiationDecision(
-            thread_id=thread_id, status="closed", reply_text=result.reply_text
-        )
+            return NegotiationDecision(
+                thread_id=thread_id, status="closed", reply_text=result.reply_text
+            )
 
+        session.commit()
     return NegotiationDecision(thread_id=thread_id, status="unknown")
 
 
@@ -417,6 +441,7 @@ class NegotiationExecutor(BatchExecutor):
                 results.append((item, decision))
             except Exception:
                 log.exception("Error negotiating thread %d", thread_id)
+                _record_negotiation_failure(thread_id)
                 results.append((item, None))
         return results
 

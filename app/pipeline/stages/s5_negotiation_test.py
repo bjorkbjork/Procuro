@@ -261,7 +261,7 @@ class TestGetReadyThreads:
 
 
 class TestRunSpecCheck:
-    def test_pass_sets_state(self, thread_awaiting_reply):
+    def test_pass_returns_true_without_state_change(self, thread_awaiting_reply):
         match_result = MatchResult(
             is_match=True,
             confidence=0.9,
@@ -277,9 +277,9 @@ class TestRunSpecCheck:
         assert passed is True
         with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
-            assert thread.state == "SPEC_CHECK_PASS"
+            assert thread.state == "AWAITING_REPLY"
 
-    def test_fail_sets_state(self, thread_awaiting_reply):
+    def test_fail_returns_false_without_state_change(self, thread_awaiting_reply):
         match_result = MatchResult(
             is_match=False,
             confidence=0.3,
@@ -295,7 +295,7 @@ class TestRunSpecCheck:
         assert passed is False
         with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
-            assert thread.state == "SPEC_CHECK_FAIL"
+            assert thread.state == "AWAITING_REPLY"
 
 
 # ---------------------------------------------------------------------------
