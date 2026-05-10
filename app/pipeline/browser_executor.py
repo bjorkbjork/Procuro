@@ -323,21 +323,27 @@ def run_with_browser_fallback(
 
 
 def check_automation_failure_rate() -> None:
-    """Email maintainer if any (stage, action) pair exceeds the failure threshold.
+    """Email maintainer if a burst of failures occurred in the recent window.
 
-    Checks the last AUTOMATION_FAILURE_ALERT_WINDOW events per pair. Follows
-    the same alert pattern as s2_supplier_search._alert_low_matches.
+    Only looks at events from the last AUTOMATION_FAILURE_ALERT_WINDOW_MINUTES.
+    Requires at least AUTOMATION_FAILURE_ALERT_MIN_EVENTS in the window before
+    alerting, so sparse activity doesn't trigger false alarms.
     """
+    from datetime import datetime, timedelta, timezone
+
     maintainer = settings.MAINTAINER_EMAIL_ADDRESS
     if not maintainer:
         return
 
-    window = settings.AUTOMATION_FAILURE_ALERT_WINDOW
+    window_minutes = settings.AUTOMATION_FAILURE_ALERT_WINDOW_MINUTES
     threshold = settings.AUTOMATION_FAILURE_ALERT_THRESHOLD
+    min_events = settings.AUTOMATION_FAILURE_ALERT_MIN_EVENTS
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
 
     with SessionLocal() as session:
         pairs = (
             session.query(AutomationEvent.stage, AutomationEvent.action)
+            .filter(AutomationEvent.created_at >= cutoff)
             .distinct()
             .all()
         )
@@ -347,14 +353,13 @@ def check_automation_failure_rate() -> None:
             recent = (
                 session.query(AutomationEvent)
                 .filter_by(stage=stage, action=action)
-                .order_by(AutomationEvent.created_at.desc())
-                .limit(window)
+                .filter(AutomationEvent.created_at >= cutoff)
                 .all()
             )
-            if not recent:
+            total = len(recent)
+            if total < min_events:
                 continue
 
-            total = len(recent)
             failed = sum(1 for e in recent if e.outcome == "failed")
             rate = failed / total
 
@@ -376,7 +381,7 @@ def check_automation_failure_rate() -> None:
             subject="[Automation Alert] High failure rate detected",
             body=(
                 "The following automation pairs exceeded the failure threshold "
-                f"(last {window} events):\n\n"
+                f"(last {window_minutes} minutes):\n\n"
                 + "\n".join(alerts)
                 + "\n\nCheck the Automation Stats tab in the output sheet for details."
             ),
