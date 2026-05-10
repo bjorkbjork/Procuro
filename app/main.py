@@ -355,7 +355,6 @@ def _sync_reporting_inner():
 def register_jobs():
     sourcing_minutes = scheduler_settings.SOURCING_INTERVAL_MINUTES
     negotiation_minutes = scheduler_settings.NEGOTIATION_INTERVAL_MINUTES
-    recover_minutes = scheduler_settings.STALLED_OUTREACH_MINUTES
 
     now = datetime.now()
     scheduler.add_job(
@@ -373,11 +372,12 @@ def register_jobs():
         id="negotiation_pipeline",
         replace_existing=True,
         max_instances=1,
+        next_run_time=now,
     )
     scheduler.add_job(
         recover_stalled,
         trigger="cron",
-        minute=f"*/{recover_minutes}",
+        minute=0,
         id="recover_stalled",
         replace_existing=True,
         max_instances=1,
