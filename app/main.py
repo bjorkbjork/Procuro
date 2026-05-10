@@ -2,10 +2,13 @@
 
 Sourcing pipeline (default every 15 min):
     Trigger (poll input sheet) → stage 1 (spec extraction) → stage 2 (supplier search)
-    → stage 3 (outreach) → stage 6 (sheet sync)
+    → stage 3 (outreach)
 
 Negotiation pipeline (default every 30 min):
-    Stage 4 (inbox triage) → stage 5 (negotiation) → stage 6 (sheet sync)
+    Stage 4 (inbox triage) → stage 5 (negotiation)
+
+Sync reporting (every 30 min):
+    Stage 6 (sheet sync) + all reporting tabs
 
 Run directly: pdm run python -m app.main
 """
@@ -103,7 +106,6 @@ def _sourcing_pipeline_inner():
     from app.pipeline.stages.s1_spec_extraction import extract_specs
     from app.pipeline.stages.s2_supplier_search import run_supplier_search
     from app.pipeline.stages.s3_outreach import send_outreach
-    from app.pipeline.stages.s6_sheet_update import update_sheet
     from app.services.sheets import SheetsService
 
     pending = _run_stage("trigger_input_sheet", get_new_urls)
@@ -142,9 +144,8 @@ def _sourcing_pipeline_inner():
                 label=lambda pid: slug_by_id[pid],
             )
 
-    # Stage 3 + 6: always run — there may be threads from previous runs
+    # Stage 3: always run — there may be threads from previous runs
     _run_stage("3_outreach", send_outreach)
-    _run_stage("6_sheet_update", update_sheet)
 
 
 def recover_stalled():
@@ -308,16 +309,14 @@ def negotiation_pipeline():
 def _negotiation_pipeline_inner():
     from app.pipeline.stages.s4_inbox_triage import triage_inbox
     from app.pipeline.stages.s5_negotiation import process_negotiations
-    from app.pipeline.stages.s6_sheet_update import update_sheet
 
     counts = _run_stage("4_inbox_triage", triage_inbox)
 
     has_replies = counts and counts.get("supplier_reply", 0) > 0
     if has_replies:
         _run_stage("5_negotiation", process_negotiations)
-        _run_stage("6_sheet_update", update_sheet)
     else:
-        log.info("Negotiation pipeline: no supplier replies, skipping stages 5-6")
+        log.info("Negotiation pipeline: no supplier replies, skipping stage 5")
 
 
 def sync_reporting():
@@ -339,8 +338,10 @@ def _sync_reporting_inner():
         sync_dashboard,
         sync_products_pipeline,
         sync_thread_activity,
+        update_sheet,
     )
 
+    _run_stage("6_sheet_update", update_sheet)
     _run_stage("sync_automation_stats", sync_automation_stats)
     _run_stage("sync_dashboard", sync_dashboard)
     _run_stage("sync_active_threads", sync_active_threads)

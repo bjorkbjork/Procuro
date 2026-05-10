@@ -133,9 +133,6 @@ class TestSourcingPipeline:
             patch(
                 "app.pipeline.stages.s3_outreach.send_outreach", return_value=3
             ) as mock_outreach,
-            patch(
-                "app.pipeline.stages.s6_sheet_update.update_sheet", return_value=5
-            ) as mock_sheet,
             patch("app.services.sheets.SheetsService", return_value=mock_sheets),
         ):
             sourcing_pipeline()
@@ -144,23 +141,19 @@ class TestSourcingPipeline:
         mock_search.assert_any_call(10)
         mock_search.assert_any_call(20)
         mock_outreach.assert_called_once()
-        mock_sheet.assert_called_once()
         mock_sheets.update_input_status.assert_any_call(0, "processing")
         mock_sheets.update_input_status.assert_any_call(0, "done")
 
     def test_still_runs_outreach_when_no_new_urls(self):
         mock_outreach = MagicMock()
-        mock_sheet = MagicMock()
 
         with (
             patch("app.pipeline.triggers.input_sheet.get_new_urls", return_value=[]),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
-            patch("app.pipeline.stages.s6_sheet_update.update_sheet", mock_sheet),
         ):
             sourcing_pipeline()
 
         mock_outreach.assert_called_once()
-        mock_sheet.assert_called_once()
 
     def test_marks_error_and_continues_on_stage1_failure(self):
         bad_url = "https://kogan.com/bad/"
@@ -187,7 +180,6 @@ class TestSourcingPipeline:
                 return_value=[],
             ) as mock_search,
             patch("app.pipeline.stages.s3_outreach.send_outreach", return_value=0),
-            patch("app.pipeline.stages.s6_sheet_update.update_sheet", return_value=0),
             patch("app.services.sheets.SheetsService", return_value=mock_sheets),
         ):
             sourcing_pipeline()
@@ -198,7 +190,6 @@ class TestSourcingPipeline:
 
     def test_still_runs_outreach_when_trigger_fails(self):
         mock_outreach = MagicMock()
-        mock_sheet = MagicMock()
 
         with (
             patch(
@@ -206,19 +197,16 @@ class TestSourcingPipeline:
                 side_effect=RuntimeError("sheets down"),
             ),
             patch("app.pipeline.stages.s3_outreach.send_outreach", mock_outreach),
-            patch("app.pipeline.stages.s6_sheet_update.update_sheet", mock_sheet),
         ):
             sourcing_pipeline()
 
         mock_outreach.assert_called_once()
-        mock_sheet.assert_called_once()
 
 
 class TestNegotiationPipeline:
     def test_chains_stages_on_supplier_replies(self):
         mock_triage = MagicMock(return_value={"supplier_reply": 2, "archived_noise": 5})
         mock_negotiate = MagicMock(return_value={"replied": 1})
-        mock_sheet = MagicMock(return_value=3)
 
         with (
             patch("app.pipeline.stages.s4_inbox_triage.triage_inbox", mock_triage),
@@ -226,13 +214,11 @@ class TestNegotiationPipeline:
                 "app.pipeline.stages.s5_negotiation.process_negotiations",
                 mock_negotiate,
             ),
-            patch("app.pipeline.stages.s6_sheet_update.update_sheet", mock_sheet),
         ):
             negotiation_pipeline()
 
         mock_triage.assert_called_once()
         mock_negotiate.assert_called_once()
-        mock_sheet.assert_called_once()
 
     def test_skips_negotiation_when_no_replies(self):
         mock_triage = MagicMock(return_value={"supplier_reply": 0, "archived_noise": 3})
