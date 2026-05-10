@@ -8,6 +8,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -29,6 +30,7 @@ class Message(Base):
     channel = Column(String, nullable=False, default="email", server_default="email")
     subject = Column(String, nullable=True)
     body = Column(Text, nullable=False)
+    attachments = Column(JSONB, nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     thread = relationship("SupplierThread", back_populates="messages")

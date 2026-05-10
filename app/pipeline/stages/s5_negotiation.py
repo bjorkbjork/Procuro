@@ -24,6 +24,8 @@ from app.db.models.message import Message
 from app.db.models.quote import Quote
 from app.db.models.supplier_thread import SupplierThread
 from app.pipeline.agents.match_agent import compare_products
+from pydantic_ai.messages import BinaryContent
+
 from app.pipeline.agents.negotiation_agent import (
     NegotiationAction,
     build_message_history,
@@ -45,6 +47,32 @@ REPLY_DELAY_MAX_HOURS = 48
 
 SILENCE_DELAY_MIN_HOURS = 24
 SILENCE_DELAY_MAX_HOURS = 72
+
+
+def _fetch_pdf_attachments(message: Message) -> list[BinaryContent] | None:
+    """Fetch PDF attachment bytes from Gmail for a message.
+
+    Returns a list of BinaryContent for each PDF, or None if there are no
+    attachments. Skips individual attachments that fail to download.
+    """
+    if not message.attachments:
+        return None
+
+    gmail = GmailService()
+    results = []
+    for att in message.attachments:
+        if att.get("mime_type") != "application/pdf":
+            continue
+        try:
+            data = gmail.get_attachment(att["gmail_message_id"], att["attachment_id"])
+            results.append(BinaryContent(data=data, media_type="application/pdf"))
+        except Exception:
+            log.exception(
+                "Failed to fetch attachment %s for message %s",
+                att.get("filename"),
+                message.id,
+            )
+    return results or None
 
 
 def _random_delay(min_hours: int, max_hours: int) -> timedelta:
@@ -214,11 +242,14 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
     latest_inbound = inbound_messages[-1]
     message_history = build_message_history(messages[:-1]) if len(messages) > 1 else []
 
+    pdf_attachments = _fetch_pdf_attachments(latest_inbound)
+
     result = negotiate(
         message_history=message_history,
         latest_supplier_message=latest_inbound.body,
         negotiation_rounds=negotiation_rounds,
         product_title=product_title,
+        attachments=pdf_attachments,
     )
 
     log.info(

@@ -139,6 +139,41 @@ def _extract_body(msg: dict) -> str:
     return ""
 
 
+def _extract_pdf_attachments(msg: dict) -> list[dict] | None:
+    """Extract metadata for PDF attachments from a Gmail message.
+
+    Walks the MIME parts tree and collects attachment_id, filename, size
+    for each application/pdf part. Returns None if no PDFs found.
+    """
+    gmail_message_id = msg.get("id", "")
+    payload = msg.get("payload", {})
+    pdfs = []
+
+    def _collect(part: dict) -> None:
+        mime = part.get("mimeType", "")
+        filename = part.get("filename", "")
+        if mime == "application/pdf" and filename:
+            body = part.get("body", {})
+            attachment_id = body.get("attachmentId")
+            if attachment_id:
+                pdfs.append(
+                    {
+                        "filename": filename,
+                        "mime_type": mime,
+                        "size": body.get("size", 0),
+                        "attachment_id": attachment_id,
+                        "gmail_message_id": gmail_message_id,
+                    }
+                )
+
+    for part in payload.get("parts", []):
+        _collect(part)
+        for sub in part.get("parts", []):
+            _collect(sub)
+
+    return pdfs or None
+
+
 def _is_no_reply_sender(name: str, addr: str) -> bool:
     return "no-reply" in addr or "noreply" in addr or "no-reply" in name.lower()
 
@@ -296,6 +331,7 @@ def _record_inbound_message(
     gmail_message_id: str,
     subject: str,
     body: str,
+    attachments: list[dict] | None = None,
 ) -> None:
     with SessionLocal() as session:
         existing = (
@@ -310,6 +346,7 @@ def _record_inbound_message(
                 direction="inbound",
                 subject=subject,
                 body=body,
+                attachments=attachments,
             )
         )
         thread = session.get(SupplierThread, thread_id)
@@ -368,11 +405,14 @@ def triage_inbox() -> dict:
             subject = _extract_subject(latest)
             body = _extract_body(latest)
             msg_id = latest.get("id", "")
+            pdf_attachments = _extract_pdf_attachments(latest)
 
             # Tier 0: known supplier thread — skip LLM, record directly
             if gmail_thread_id in known_threads:
                 thread_id = known_threads[gmail_thread_id]
-                _record_inbound_message(thread_id, msg_id, subject, body)
+                _record_inbound_message(
+                    thread_id, msg_id, subject, body, attachments=pdf_attachments
+                )
                 gmail.archive_thread(gmail_thread_id)
                 counts["supplier_reply"] += 1
                 log.info(
@@ -429,7 +469,9 @@ def triage_inbox() -> dict:
                 counts["archived_noise"] += 1
 
             elif result.action == "reply_supplier" and result.thread_id:
-                _record_inbound_message(result.thread_id, msg_id, subject, body)
+                _record_inbound_message(
+                    result.thread_id, msg_id, subject, body, attachments=pdf_attachments
+                )
                 _link_gmail_thread(result.thread_id, gmail_thread_id)
                 gmail.archive_thread(gmail_thread_id)
                 counts["supplier_reply"] += 1
