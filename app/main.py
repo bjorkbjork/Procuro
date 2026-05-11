@@ -337,15 +337,8 @@ def _negotiation_pipeline_inner():
     from app.pipeline.stages.s4_inbox_triage import triage_inbox
     from app.pipeline.stages.s5_negotiation import process_negotiations
 
-    counts = _run_stage("4_inbox_triage", triage_inbox)
-
-    has_replies = counts and (
-        counts.get("supplier_reply", 0) > 0 or counts.get("platform_messages", 0) > 0
-    )
-    if has_replies:
-        _run_stage("5_negotiation", process_negotiations)
-    else:
-        log.info("Negotiation pipeline: no supplier replies, skipping stage 5")
+    _run_stage("4_inbox_triage", triage_inbox)
+    _run_stage("5_negotiation", process_negotiations)
 
 
 def sync_reporting():

@@ -189,7 +189,7 @@ class TestNegotiationPipeline:
         mock_triage.assert_called_once()
         mock_negotiate.assert_called_once()
 
-    def test_skips_negotiation_when_no_replies(self):
+    def test_runs_negotiation_even_when_no_replies(self):
         mock_triage = MagicMock(return_value={"supplier_reply": 0, "archived_noise": 3})
         mock_negotiate = MagicMock()
 
@@ -203,9 +203,9 @@ class TestNegotiationPipeline:
             negotiation_pipeline()
 
         mock_triage.assert_called_once()
-        mock_negotiate.assert_not_called()
+        mock_negotiate.assert_called_once()
 
-    def test_skips_negotiation_when_triage_fails(self):
+    def test_runs_negotiation_even_when_triage_fails(self):
         mock_triage = MagicMock(side_effect=RuntimeError("gmail down"))
         mock_negotiate = MagicMock()
 
@@ -218,7 +218,7 @@ class TestNegotiationPipeline:
         ):
             negotiation_pipeline()
 
-        mock_negotiate.assert_not_called()
+        mock_negotiate.assert_called_once()
 
 
 class TestRecoverStalled:
