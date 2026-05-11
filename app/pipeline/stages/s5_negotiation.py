@@ -106,15 +106,31 @@ def _random_delay(min_hours: int, max_hours: int) -> timedelta:
 
 
 def _get_ready_threads() -> list[int]:
-    """Return IDs of threads that have an unprocessed supplier reply."""
+    """Return IDs of threads that need negotiation (no pending reply waiting to send)."""
     now = datetime.now(timezone.utc)
     with SessionLocal() as session:
         threads = (
             session.query(SupplierThread)
             .filter(
                 SupplierThread.state.in_(["AWAITING_REPLY", "NEGOTIATING"]),
+                SupplierThread.pending_reply.is_(None),
                 (SupplierThread.respond_after.is_(None))
                 | (SupplierThread.respond_after <= now),
+            )
+            .all()
+        )
+        return [t.id for t in threads]
+
+
+def _get_pending_sends() -> list[int]:
+    """Return IDs of threads with a pending reply ready to send."""
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        threads = (
+            session.query(SupplierThread)
+            .filter(
+                SupplierThread.pending_reply.isnot(None),
+                SupplierThread.respond_after <= now,
             )
             .all()
         )
@@ -318,14 +334,13 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
         if result.action == NegotiationAction.REPLY:
             thread.state = "NEGOTIATING"
             thread.negotiation_rounds = negotiation_rounds + 1
+            thread.pending_reply = result.reply_text
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
                 REPLY_DELAY_MIN_HOURS,
                 REPLY_DELAY_MAX_HOURS,
             )
             session.commit()
-            return NegotiationDecision(
-                thread_id=thread_id, status="replied", reply_text=result.reply_text
-            )
+            return NegotiationDecision(thread_id=thread_id, status="replied")
 
         elif result.action == NegotiationAction.SILENCE:
             thread.respond_after = datetime.now(timezone.utc) + _random_delay(
@@ -529,63 +544,137 @@ class PlatformReplyExecutor(BrowserFallbackExecutor):
 # ---------------------------------------------------------------------------
 
 
-def process_negotiations() -> dict:
-    """Process all threads ready for negotiation.
-
-    Step 1: NegotiationExecutor fans out LLM negotiations.
-    Step 2a: Email replies sent directly via Gmail.
-    Step 2b: Platform replies sent via PlatformReplyExecutor (browser).
-
-    Returns a summary dict with counts per outcome.
-    """
-    # Step 1: Negotiate
-    results = NegotiationExecutor().execute()
-    if not results:
-        log.info("No threads ready for negotiation")
+def _send_pending_replies() -> dict[str, int]:
+    """Send replies that were held for respond_after and are now due."""
+    pending_ids = _get_pending_sends()
+    if not pending_ids:
         return {}
 
-    log.info("Negotiated %d threads", len(results))
+    log.info("Sending %d pending replies", len(pending_ids))
 
     counts: dict[str, int] = {}
-    email_replies: list[tuple[dict, NegotiationDecision]] = []
+    email_replies: list[tuple[dict, int, str]] = []
     platform_replies: dict[str, list[dict]] = {}
 
-    for meta, decision in results:
-        if decision is None:
-            counts["error"] = counts.get("error", 0) + 1
-            continue
+    meta_list = _prepare_thread_metadata(pending_ids)
 
-        counts[decision.status] = counts.get(decision.status, 0) + 1
-        log.info("Thread %d → %s", decision.thread_id, decision.status)
+    for meta in meta_list:
+        thread_id = meta["thread_id"]
+        with SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_id)
+            reply_text = thread.pending_reply
 
-        if decision.reply_text:
-            if meta["channel"] == "email":
-                email_replies.append((meta, decision))
-            elif meta["platform_thread_url"]:
-                platform_replies.setdefault(meta["platform_name"], []).append(
-                    {
-                        "thread_id": decision.thread_id,
-                        "reply_text": decision.reply_text,
-                        "conversation_url": meta["platform_thread_url"],
-                    }
-                )
+        if meta["channel"] == "email":
+            email_replies.append((meta, thread_id, reply_text))
+        elif meta["platform_thread_url"]:
+            platform_replies.setdefault(meta["platform_name"], []).append(
+                {
+                    "thread_id": thread_id,
+                    "reply_text": reply_text,
+                    "conversation_url": meta["platform_thread_url"],
+                }
+            )
 
-    # Step 2a: Send email replies
     if email_replies:
         gmail = GmailService()
-        for meta, decision in email_replies:
+        for meta, thread_id, reply_text in email_replies:
             if not meta["gmail_thread_id"]:
                 continue
             reply_fn = _make_email_reply_fn(gmail, meta["gmail_thread_id"])
-            msg_id = reply_fn(decision.reply_text)
+            msg_id = reply_fn(reply_text)
             if msg_id is not None:
-                _record_outbound(
-                    decision.thread_id, msg_id, "email", decision.reply_text
-                )
+                _record_outbound(thread_id, msg_id, "email", reply_text)
+                with SessionLocal() as session:
+                    thread = session.get(SupplierThread, thread_id)
+                    thread.pending_reply = None
+                    thread.respond_after = None
+                    session.commit()
+                counts["sent"] = counts.get("sent", 0) + 1
+                log.info("Sent pending reply for thread %d", thread_id)
 
-    # Step 2b: Send platform replies
     if platform_replies:
         PlatformReplyExecutor(platform_replies).execute()
+        # Clear pending_reply for platform threads after send attempt
+        for group in platform_replies.values():
+            for item in group:
+                with SessionLocal() as session:
+                    thread = session.get(SupplierThread, item["thread_id"])
+                    thread.pending_reply = None
+                    thread.respond_after = None
+                    session.commit()
+                counts["sent"] = counts.get("sent", 0) + 1
+
+    log.info("Pending reply sending complete: %s", counts)
+    return counts
+
+
+def process_negotiations() -> dict:
+    """Process all threads ready for negotiation.
+
+    Step 1: NegotiationExecutor fans out LLM negotiations (triage).
+    Step 2: Send immediate replies (close, spec_check_fail).
+    Step 3: Send pending replies whose respond_after deadline has passed.
+
+    REPLY action replies are stored in pending_reply and sent later
+    once respond_after is reached, for human-like response timing.
+
+    Returns a summary dict with counts per outcome.
+    """
+    counts: dict[str, int] = {}
+
+    # Step 1: Negotiate (triage new inbound messages)
+    results = NegotiationExecutor().execute()
+
+    if results:
+        log.info("Negotiated %d threads", len(results))
+
+        email_replies: list[tuple[dict, NegotiationDecision]] = []
+        platform_replies: dict[str, list[dict]] = {}
+
+        for meta, decision in results:
+            if decision is None:
+                counts["error"] = counts.get("error", 0) + 1
+                continue
+
+            counts[decision.status] = counts.get(decision.status, 0) + 1
+            log.info("Thread %d → %s", decision.thread_id, decision.status)
+
+            # Only immediate replies (close/spec_check_fail) have reply_text;
+            # REPLY action stores text in pending_reply for deferred send.
+            if decision.reply_text:
+                if meta["channel"] == "email":
+                    email_replies.append((meta, decision))
+                elif meta["platform_thread_url"]:
+                    platform_replies.setdefault(meta["platform_name"], []).append(
+                        {
+                            "thread_id": decision.thread_id,
+                            "reply_text": decision.reply_text,
+                            "conversation_url": meta["platform_thread_url"],
+                        }
+                    )
+
+        # Step 2: Send immediate replies (close/spec_check_fail)
+        if email_replies:
+            gmail = GmailService()
+            for meta, decision in email_replies:
+                if not meta["gmail_thread_id"]:
+                    continue
+                reply_fn = _make_email_reply_fn(gmail, meta["gmail_thread_id"])
+                msg_id = reply_fn(decision.reply_text)
+                if msg_id is not None:
+                    _record_outbound(
+                        decision.thread_id, msg_id, "email", decision.reply_text
+                    )
+
+        if platform_replies:
+            PlatformReplyExecutor(platform_replies).execute()
+    else:
+        log.info("No threads ready for negotiation")
+
+    # Step 3: Send pending replies whose respond_after deadline has passed
+    send_counts = _send_pending_replies()
+    for k, v in send_counts.items():
+        counts[k] = counts.get(k, 0) + v
 
     log.info("Negotiation processing complete: %s", counts)
     return counts

@@ -54,6 +54,7 @@ class SupplierThread(Base):
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    pending_reply = Column(String, nullable=True)
     negotiation_failures = Column(
         Integer, nullable=False, default=0, server_default="0"
     )

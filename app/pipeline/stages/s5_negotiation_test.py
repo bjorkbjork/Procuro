@@ -21,6 +21,7 @@ from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
 from app.pipeline.stages.s5_negotiation import (
+    _get_pending_sends,
     _get_ready_threads,
     _process_thread,
     _record_quote,
@@ -254,6 +255,47 @@ class TestGetReadyThreads:
         ids = _get_ready_threads()
         assert thread_awaiting_reply in ids
 
+    def test_skips_thread_with_pending_reply(self, thread_negotiating):
+        with _db.SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_negotiating)
+            thread.pending_reply = "Waiting to send"
+            thread.respond_after = datetime.now(timezone.utc) + timedelta(hours=24)
+            session.commit()
+
+        ids = _get_ready_threads()
+        assert thread_negotiating not in ids
+
+
+# ---------------------------------------------------------------------------
+# _get_pending_sends
+# ---------------------------------------------------------------------------
+
+
+class TestGetPendingSends:
+    def test_picks_up_thread_with_due_pending_reply(self, thread_negotiating):
+        with _db.SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_negotiating)
+            thread.pending_reply = "Here is my reply"
+            thread.respond_after = datetime.now(timezone.utc) - timedelta(hours=1)
+            session.commit()
+
+        ids = _get_pending_sends()
+        assert thread_negotiating in ids
+
+    def test_skips_thread_with_future_respond_after(self, thread_negotiating):
+        with _db.SessionLocal() as session:
+            thread = session.get(SupplierThread, thread_negotiating)
+            thread.pending_reply = "Here is my reply"
+            thread.respond_after = datetime.now(timezone.utc) + timedelta(hours=24)
+            session.commit()
+
+        ids = _get_pending_sends()
+        assert thread_negotiating not in ids
+
+    def test_skips_thread_without_pending_reply(self, thread_negotiating):
+        ids = _get_pending_sends()
+        assert thread_negotiating not in ids
+
 
 # ---------------------------------------------------------------------------
 # _run_spec_check
@@ -378,11 +420,12 @@ class TestProcessThreadSpecCheck:
             status = _process_thread(thread_awaiting_reply, reply_fn, "email")
 
         assert status == "replied"
-        reply_fn.assert_called_once()
+        reply_fn.assert_not_called()
         with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_awaiting_reply)
             assert thread.state == "NEGOTIATING"
             assert thread.negotiation_rounds == 1
+            assert thread.pending_reply == "That price is too high."
             assert thread.respond_after is not None
 
 
@@ -392,7 +435,7 @@ class TestProcessThreadSpecCheck:
 
 
 class TestProcessThreadNegotiation:
-    def test_reply_action(self, thread_negotiating):
+    def test_reply_action_defers_send(self, thread_negotiating):
         neg_result = NegotiationResult(
             action=NegotiationAction.REPLY,
             reply_text="We need you to come down further.",
@@ -407,14 +450,13 @@ class TestProcessThreadNegotiation:
             status = _process_thread(thread_negotiating, reply_fn, "email")
 
         assert status == "replied"
-        reply_fn.assert_called_once()
-        reply_body = reply_fn.call_args.args[0]
-        assert "come down further" in reply_body
+        reply_fn.assert_not_called()
 
         with _db.SessionLocal() as session:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.state == "NEGOTIATING"
             assert thread.negotiation_rounds == 2
+            assert thread.pending_reply == "We need you to come down further."
             assert thread.respond_after > datetime.now(timezone.utc)
 
             quotes = session.query(Quote).filter_by(thread_id=thread_negotiating).all()
@@ -481,11 +523,12 @@ class TestProcessThreadNegotiation:
             thread = session.get(SupplierThread, thread_negotiating)
             assert thread.state == "CLOSED"
 
-    def test_records_outbound_message(self, thread_negotiating):
+    def test_records_outbound_message_on_close(self, thread_negotiating):
         neg_result = NegotiationResult(
-            action=NegotiationAction.REPLY,
-            reply_text="Need better pricing.",
-            extracted_quote=ExtractedQuote(),
+            action=NegotiationAction.CLOSE,
+            reply_text="Thank you, we will pass.",
+            extracted_quote=ExtractedQuote(price_usd=38.0),
+            reasoning="Final price acceptable",
         )
         reply_fn = MagicMock(return_value="gmsg_reply_out")
 
@@ -505,7 +548,7 @@ class TestProcessThreadNegotiation:
                 .first()
             )
             assert outbound is not None
-            assert outbound.body == "Need better pricing."
+            assert outbound.body == "Thank you, we will pass."
 
 
 # ---------------------------------------------------------------------------
@@ -573,8 +616,13 @@ class TestProcessNegotiations:
         assert counts.get("replied", 0) >= 1
 
     def test_empty_when_no_threads(self):
-        with patch(
-            "app.pipeline.stages.s5_negotiation._get_ready_threads", return_value=[]
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation._get_ready_threads", return_value=[]
+            ),
+            patch(
+                "app.pipeline.stages.s5_negotiation._get_pending_sends", return_value=[]
+            ),
         ):
             counts = process_negotiations()
 
@@ -609,9 +657,7 @@ class TestProcessNegotiations:
                 raise RuntimeError("Simulated failure")
             from app.pipeline.stages.s5_negotiation import NegotiationDecision
 
-            return NegotiationDecision(
-                thread_id=thread_id, status="replied", reply_text="counter"
-            )
+            return NegotiationDecision(thread_id=thread_id, status="replied")
 
         with (
             patch(
