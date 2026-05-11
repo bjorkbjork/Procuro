@@ -87,9 +87,7 @@ def _get_ready_threads() -> list[int]:
         threads = (
             session.query(SupplierThread)
             .filter(
-                SupplierThread.state.in_(
-                    ["AWAITING_REPLY", "SPEC_CHECK_PASS", "NEGOTIATING"]
-                ),
+                SupplierThread.state.in_(["AWAITING_REPLY", "NEGOTIATING"]),
                 (SupplierThread.respond_after.is_(None))
                 | (SupplierThread.respond_after <= now),
             )

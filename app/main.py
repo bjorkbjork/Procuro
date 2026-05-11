@@ -303,9 +303,7 @@ def _recover_stalled_inner():
         stalled_negotiation = (
             session.query(SupplierThread)
             .filter(
-                SupplierThread.state.in_(
-                    ["AWAITING_REPLY", "SPEC_CHECK_PASS", "NEGOTIATING"]
-                ),
+                SupplierThread.state.in_(["AWAITING_REPLY", "NEGOTIATING"]),
                 SupplierThread.respond_after.is_(None),
                 SupplierThread.last_updated < negotiation_cutoff,
             )
