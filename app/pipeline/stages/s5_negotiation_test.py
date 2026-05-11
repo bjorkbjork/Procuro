@@ -205,6 +205,14 @@ def thread_negotiating():
         session.commit()
 
 
+@pytest.fixture(autouse=True)
+def _no_gmail_sync():
+    with patch(
+        "app.pipeline.stages.s5_negotiation._sync_gmail_messages", return_value=0
+    ):
+        yield
+
+
 def _mock_gmail():
     mock = MagicMock()
     mock.reply_to_thread.return_value = {"id": "gmsg_reply_out"}

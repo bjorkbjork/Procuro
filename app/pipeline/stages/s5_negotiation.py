@@ -34,7 +34,13 @@ from app.pipeline.agents.negotiation_agent import (
 from app.pipeline.batch_executor import BatchExecutor
 from app.pipeline.browser_executor import BrowserFallbackExecutor, FallbackResult
 from app.services.gmail import GmailService
-from app.pipeline.stages.s4_inbox_triage import _extract_sender
+from app.pipeline.stages.s4_inbox_triage import (
+    _extract_attachments,
+    _extract_body,
+    _extract_sender,
+    _extract_subject,
+    _record_inbound_message,
+)
 
 log = logging.getLogger(__name__)
 
@@ -252,6 +258,46 @@ class NegotiationDecision:
     reply_text: str | None = None
 
 
+def _sync_gmail_messages(thread_id: int) -> int:
+    """Fetch full Gmail thread and record any inbound messages missing from the DB.
+
+    Returns the number of newly recorded messages. Best-effort — Gmail
+    failures are logged but don't block negotiation.
+    """
+    with SessionLocal() as session:
+        thread = session.get(SupplierThread, thread_id)
+        if not thread or not thread.gmail_thread_id:
+            return 0
+        gmail_thread_id = thread.gmail_thread_id
+
+    try:
+        gmail = GmailService()
+        thread_data = gmail.get_thread(gmail_thread_id)
+    except Exception:
+        log.exception("Failed to sync Gmail messages for thread %d", thread_id)
+        return 0
+
+    gmail_messages = thread_data.get("messages", [])
+
+    recorded = 0
+    for msg in gmail_messages:
+        _, sender_email = _extract_sender(msg)
+        if sender_email == settings.GMAIL_ACCOUNT:
+            continue
+        msg_id = msg.get("id", "")
+        subject = _extract_subject(msg)
+        body = _extract_body(msg)
+        attachments = _extract_attachments(msg)
+        _record_inbound_message(
+            thread_id, msg_id, subject, body, attachments=attachments
+        )
+        recorded += 1
+
+    if recorded:
+        log.info("Synced %d messages from Gmail for thread %d", recorded, thread_id)
+    return recorded
+
+
 def _negotiate_thread(thread_id: int) -> NegotiationDecision:
     """Run negotiation for one thread.
 
@@ -259,6 +305,9 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
     if anything crashes mid-way, the thread stays in its original state
     and will be retried on the next run.
     """
+    # Sync any messages from Gmail that s4 may have missed
+    _sync_gmail_messages(thread_id)
+
     with SessionLocal() as session:
         thread = session.get(SupplierThread, thread_id)
         if not thread:
