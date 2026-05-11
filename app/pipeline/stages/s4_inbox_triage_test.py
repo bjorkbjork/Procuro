@@ -18,7 +18,7 @@ from app.pipeline.stages.s4_inbox_triage import (
     TriageResult,
     _add_ignore_email,
     _extract_body,
-    _extract_pdf_attachments,
+    _extract_attachments,
     _extract_sender,
     _extract_subject,
     _get_ignore_emails,
@@ -107,7 +107,7 @@ class TestIsNoReplySender:
         assert not _is_no_reply_sender("John", "john@example.com")
 
 
-class TestExtractPdfAttachments:
+class TestExtractAttachments:
     def test_extracts_pdf_metadata(self):
         msg = {
             "id": "msg123",
@@ -129,7 +129,7 @@ class TestExtractPdfAttachments:
                 ],
             },
         }
-        result = _extract_pdf_attachments(msg)
+        result = _extract_attachments(msg)
         assert result == [
             {
                 "filename": "quote.pdf",
@@ -142,9 +142,9 @@ class TestExtractPdfAttachments:
 
     def test_returns_none_when_no_attachments(self):
         msg = _make_gmail_message("a@b.com", "subj", "body")
-        assert _extract_pdf_attachments(msg) is None
+        assert _extract_attachments(msg) is None
 
-    def test_ignores_non_pdf_attachments(self):
+    def test_extracts_convertible_attachment(self):
         msg = {
             "id": "msg456",
             "payload": {
@@ -155,6 +155,26 @@ class TestExtractPdfAttachments:
                         "filename": "data.xlsx",
                         "body": {"attachmentId": "ATT_XLSX", "size": 9999},
                     },
+                ],
+            },
+        }
+        result = _extract_attachments(msg)
+        assert result == [
+            {
+                "filename": "data.xlsx",
+                "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "size": 9999,
+                "attachment_id": "ATT_XLSX",
+                "gmail_message_id": "msg456",
+            }
+        ]
+
+    def test_ignores_unsupported_attachments(self):
+        msg = {
+            "id": "msg456",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "parts": [
                     {
                         "mimeType": "image/png",
                         "filename": "logo.png",
@@ -163,7 +183,7 @@ class TestExtractPdfAttachments:
                 ],
             },
         }
-        assert _extract_pdf_attachments(msg) is None
+        assert _extract_attachments(msg) is None
 
     def test_extracts_nested_pdf(self):
         msg = {
@@ -185,7 +205,7 @@ class TestExtractPdfAttachments:
                 ],
             },
         }
-        result = _extract_pdf_attachments(msg)
+        result = _extract_attachments(msg)
         assert len(result) == 1
         assert result[0]["filename"] == "prices.pdf"
 
@@ -208,7 +228,7 @@ class TestExtractPdfAttachments:
                 ],
             },
         }
-        result = _extract_pdf_attachments(msg)
+        result = _extract_attachments(msg)
         assert len(result) == 2
 
 

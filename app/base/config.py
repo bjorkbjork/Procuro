@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     AUTOMATION_FAILURE_ALERT_WINDOW_MINUTES: int = 30
     AUTOMATION_FAILURE_ALERT_MIN_EVENTS: int = 5
     REAUTH_MAX_RETRIES: int = 5
+    LIBREOFFICE_TIMEOUT_SECONDS: int = 60
 
 
 class PostgresSettings(BaseSettings):
