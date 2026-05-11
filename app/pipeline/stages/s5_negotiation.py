@@ -49,27 +49,52 @@ SILENCE_DELAY_MIN_HOURS = 24
 SILENCE_DELAY_MAX_HOURS = 72
 
 
-def _fetch_pdf_attachments(message: Message) -> list[BinaryContent] | None:
-    """Fetch PDF attachment bytes from Gmail for a message.
+def _fetch_attachments(message: Message) -> list[BinaryContent] | None:
+    """Fetch attachment bytes from Gmail, converting non-PDF documents to PDF.
 
-    Returns a list of BinaryContent for each PDF, or None if there are no
-    attachments. Skips individual attachments that fail to download.
+    Returns a list of BinaryContent for each attachment, or None if there are no
+    attachments. Skips individual attachments that fail to download or convert.
     """
     if not message.attachments:
         return None
 
+    from app.pipeline.stages.attachment_conversion import (
+        CONVERTIBLE_MIME_TYPES,
+        PDF_MIME_TYPE,
+        ConversionError,
+        convert_to_pdf,
+    )
+
     gmail = GmailService()
     results = []
     for att in message.attachments:
-        if att.get("mime_type") != "application/pdf":
+        mime_type = att.get("mime_type", "")
+        filename = att.get("filename", "unknown")
+
+        if mime_type != PDF_MIME_TYPE and mime_type not in CONVERTIBLE_MIME_TYPES:
             continue
+
         try:
             data = gmail.get_attachment(att["gmail_message_id"], att["attachment_id"])
+
+            if mime_type in CONVERTIBLE_MIME_TYPES:
+                log.info(
+                    "Converting %s (%s) to PDF via LibreOffice", filename, mime_type
+                )
+                data = convert_to_pdf(data, filename, mime_type)
+
             results.append(BinaryContent(data=data, media_type="application/pdf"))
+        except ConversionError:
+            log.exception(
+                "Failed to convert attachment %s (%s) for message %s",
+                filename,
+                mime_type,
+                message.id,
+            )
         except Exception:
             log.exception(
                 "Failed to fetch attachment %s for message %s",
-                att.get("filename"),
+                filename,
                 message.id,
             )
     return results or None
@@ -264,7 +289,7 @@ def _negotiate_thread(thread_id: int) -> NegotiationDecision:
     latest_inbound = inbound_messages[-1]
     message_history = build_message_history(messages[:-1]) if len(messages) > 1 else []
 
-    pdf_attachments = _fetch_pdf_attachments(latest_inbound)
+    pdf_attachments = _fetch_attachments(latest_inbound)
 
     result = negotiate(
         message_history=message_history,

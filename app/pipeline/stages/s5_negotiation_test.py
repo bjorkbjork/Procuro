@@ -629,13 +629,13 @@ class TestProcessNegotiations:
 
 
 # ---------------------------------------------------------------------------
-# _fetch_pdf_attachments
+# _fetch_attachments
 # ---------------------------------------------------------------------------
 
 
-class TestFetchPdfAttachments:
+class TestFetchAttachments:
     def test_returns_none_when_no_attachments(self):
-        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
 
         msg = Message(
             thread_id=1,
@@ -643,12 +643,12 @@ class TestFetchPdfAttachments:
             body="Hello",
             attachments=None,
         )
-        assert _fetch_pdf_attachments(msg) is None
+        assert _fetch_attachments(msg) is None
 
     def test_fetches_pdf_bytes(self):
         from pydantic_ai.messages import BinaryContent
 
-        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
 
         msg = Message(
             thread_id=1,
@@ -671,7 +671,7 @@ class TestFetchPdfAttachments:
             "app.pipeline.stages.s5_negotiation.GmailService",
             return_value=mock_gmail,
         ):
-            result = _fetch_pdf_attachments(msg)
+            result = _fetch_attachments(msg)
 
         assert result is not None
         assert len(result) == 1
@@ -681,7 +681,7 @@ class TestFetchPdfAttachments:
         mock_gmail.get_attachment.assert_called_once_with("msg_abc", "ATT1")
 
     def test_skips_failed_download(self):
-        from app.pipeline.stages.s5_negotiation import _fetch_pdf_attachments
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
 
         msg = Message(
             thread_id=1,
@@ -704,6 +704,152 @@ class TestFetchPdfAttachments:
             "app.pipeline.stages.s5_negotiation.GmailService",
             return_value=mock_gmail,
         ):
-            result = _fetch_pdf_attachments(msg)
+            result = _fetch_attachments(msg)
 
         assert result is None
+
+    def test_converts_xlsx_to_pdf(self):
+        from pydantic_ai.messages import BinaryContent
+
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="See attached quote",
+            attachments=[
+                {
+                    "filename": "prices.xlsx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "size": 5000,
+                    "attachment_id": "ATT_XLSX",
+                    "gmail_message_id": "msg_xlsx",
+                }
+            ],
+        )
+        mock_gmail = MagicMock()
+        mock_gmail.get_attachment.return_value = b"xlsx-bytes"
+
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch(
+                "app.pipeline.stages.attachment_conversion.convert_to_pdf",
+                return_value=b"%PDF-converted",
+            ) as mock_convert,
+        ):
+            result = _fetch_attachments(msg)
+
+        assert result is not None
+        assert len(result) == 1
+        assert isinstance(result[0], BinaryContent)
+        assert result[0].data == b"%PDF-converted"
+        assert result[0].media_type == "application/pdf"
+        mock_convert.assert_called_once_with(
+            b"xlsx-bytes",
+            "prices.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def test_skips_failed_conversion(self):
+        from app.pipeline.stages.attachment_conversion import ConversionError
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="See attached",
+            attachments=[
+                {
+                    "filename": "broken.docx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "size": 3000,
+                    "attachment_id": "ATT_DOCX",
+                    "gmail_message_id": "msg_docx",
+                }
+            ],
+        )
+        mock_gmail = MagicMock()
+        mock_gmail.get_attachment.return_value = b"docx-bytes"
+
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch(
+                "app.pipeline.stages.attachment_conversion.convert_to_pdf",
+                side_effect=ConversionError("broken.docx", "LibreOffice timed out"),
+            ),
+        ):
+            result = _fetch_attachments(msg)
+
+        assert result is None
+
+    def test_mixed_pdf_and_docx(self):
+        from pydantic_ai.messages import BinaryContent
+
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="Multiple files",
+            attachments=[
+                {
+                    "filename": "quote.pdf",
+                    "mime_type": "application/pdf",
+                    "size": 1000,
+                    "attachment_id": "ATT_PDF",
+                    "gmail_message_id": "msg_mix",
+                },
+                {
+                    "filename": "specs.docx",
+                    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "size": 2000,
+                    "attachment_id": "ATT_DOCX",
+                    "gmail_message_id": "msg_mix",
+                },
+            ],
+        )
+        mock_gmail = MagicMock()
+        mock_gmail.get_attachment.side_effect = [b"%PDF-native", b"docx-bytes"]
+
+        with (
+            patch(
+                "app.pipeline.stages.s5_negotiation.GmailService",
+                return_value=mock_gmail,
+            ),
+            patch(
+                "app.pipeline.stages.attachment_conversion.convert_to_pdf",
+                return_value=b"%PDF-converted",
+            ),
+        ):
+            result = _fetch_attachments(msg)
+
+        assert result is not None
+        assert len(result) == 2
+        assert all(isinstance(r, BinaryContent) for r in result)
+        assert result[0].data == b"%PDF-native"
+        assert result[1].data == b"%PDF-converted"
+
+    def test_ignores_unsupported_mime_type(self):
+        from app.pipeline.stages.s5_negotiation import _fetch_attachments
+
+        msg = Message(
+            thread_id=1,
+            direction="inbound",
+            body="Image only",
+            attachments=[
+                {
+                    "filename": "photo.png",
+                    "mime_type": "image/png",
+                    "size": 500,
+                    "attachment_id": "ATT_PNG",
+                    "gmail_message_id": "msg_png",
+                }
+            ],
+        )
+        assert _fetch_attachments(msg) is None

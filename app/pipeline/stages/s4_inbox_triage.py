@@ -139,12 +139,15 @@ def _extract_body(msg: dict) -> str:
     return ""
 
 
-def _extract_pdf_attachments(msg: dict) -> list[dict] | None:
-    """Extract metadata for PDF attachments from a Gmail message.
+def _extract_attachments(msg: dict) -> list[dict] | None:
+    """Extract metadata for document attachments from a Gmail message.
 
     Walks the MIME parts tree and collects attachment_id, filename, size
-    for each application/pdf part. Returns None if no PDFs found.
+    for PDFs and convertible documents (xlsx, xls, docx, doc).
+    Returns None if no supported attachments found.
     """
+    from app.pipeline.stages.attachment_conversion import ALL_ATTACHMENT_MIME_TYPES
+
     gmail_message_id = msg.get("id", "")
     payload = msg.get("payload", {})
     pdfs = []
@@ -152,7 +155,7 @@ def _extract_pdf_attachments(msg: dict) -> list[dict] | None:
     def _collect(part: dict) -> None:
         mime = part.get("mimeType", "")
         filename = part.get("filename", "")
-        if mime == "application/pdf" and filename:
+        if mime in ALL_ATTACHMENT_MIME_TYPES and filename:
             body = part.get("body", {})
             attachment_id = body.get("attachmentId")
             if attachment_id:
@@ -405,13 +408,13 @@ def triage_inbox() -> dict:
             subject = _extract_subject(latest)
             body = _extract_body(latest)
             msg_id = latest.get("id", "")
-            pdf_attachments = _extract_pdf_attachments(latest)
+            attachments = _extract_attachments(latest)
 
             # Tier 0: known supplier thread — skip LLM, record directly
             if gmail_thread_id in known_threads:
                 thread_id = known_threads[gmail_thread_id]
                 _record_inbound_message(
-                    thread_id, msg_id, subject, body, attachments=pdf_attachments
+                    thread_id, msg_id, subject, body, attachments=attachments
                 )
                 gmail.archive_thread(gmail_thread_id)
                 counts["supplier_reply"] += 1
@@ -470,7 +473,7 @@ def triage_inbox() -> dict:
 
             elif result.action == "reply_supplier" and result.thread_id:
                 _record_inbound_message(
-                    result.thread_id, msg_id, subject, body, attachments=pdf_attachments
+                    result.thread_id, msg_id, subject, body, attachments=attachments
                 )
                 _link_gmail_thread(result.thread_id, gmail_thread_id)
                 gmail.archive_thread(gmail_thread_id)
