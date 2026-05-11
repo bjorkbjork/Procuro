@@ -898,4 +898,13 @@ class TestFetchAttachments:
                 }
             ],
         )
-        assert _fetch_attachments(msg) is None
+        mock_gmail = MagicMock()
+
+        with patch(
+            "app.pipeline.stages.s5_negotiation.GmailService",
+            return_value=mock_gmail,
+        ):
+            result = _fetch_attachments(msg)
+
+        assert result is None
+        mock_gmail.get_attachment.assert_not_called()
