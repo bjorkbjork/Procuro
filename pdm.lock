@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform"]
 lock_version = "4.5.0"
-content_hash = "sha256:b00aff54a3c411ba839d2a38b1f41b847aa876e8a0a0a394adf7c115ddf03718"
+content_hash = "sha256:5cceac08e2f482f48eabb2dd2228ffd91eb4c2f245c8602ea0ac2ce4e83e3fca"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
@@ -147,7 +147,7 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.100.0"
+version = "0.102.0"
 summary = ""
 dependencies = [
     "anyio",
@@ -160,8 +160,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "anthropic-0.100.0-py3-none-any.whl", hash = "sha256:1c15769efa15d8fd5c1ebf900e25c57e3ee540f8554a29aa56e4edefffe2951d"},
-    {file = "anthropic-0.100.0.tar.gz", hash = "sha256:650dee9e023afb16395939ee4104bbc21f966b380210119fb91122c12099c79a"},
+    {file = "anthropic-0.102.0-py3-none-any.whl", hash = "sha256:ab96540bbd4b0f36564252d955a86f8abbe4f00944a24bc9931acc9b139bab6f"},
+    {file = "anthropic-0.102.0.tar.gz", hash = "sha256:96f747cad11886c4ae12d4080131b94eebd68b202bd2190fe27959031bb1fa9c"},
 ]
 
 [[package]]
@@ -266,7 +266,7 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.43.6"
+version = "1.43.8"
 summary = ""
 dependencies = [
     "botocore",
@@ -274,13 +274,13 @@ dependencies = [
     "s3transfer",
 ]
 files = [
-    {file = "boto3-1.43.6-py3-none-any.whl", hash = "sha256:179601ec2992726a718053bf41e43c223ceba397d31ceab11f64d9c910d9fc3a"},
-    {file = "boto3-1.43.6.tar.gz", hash = "sha256:e6315effaf12b890b99956e6f8e2c3000a3f64e4ee91943cec3895ce9a836afb"},
+    {file = "boto3-1.43.8-py3-none-any.whl", hash = "sha256:1894497c383e3cdf50e210f1f57a43e9f4047a5d3accc73ffdb7eacc3b0f011b"},
+    {file = "boto3-1.43.8.tar.gz", hash = "sha256:d1235602d715c727c1923ef4bcdb5612a20575a9a5e4f2db00d571e0ea1f85fc"},
 ]
 
 [[package]]
 name = "botocore"
-version = "1.43.6"
+version = "1.43.8"
 summary = ""
 dependencies = [
     "jmespath",
@@ -288,13 +288,13 @@ dependencies = [
     "urllib3",
 ]
 files = [
-    {file = "botocore-1.43.6-py3-none-any.whl", hash = "sha256:b6d1fdbc6f65a5fe0b7e947823aa37535d3f39f3ba4d21110fab1f55bbbcc04b"},
-    {file = "botocore-1.43.6.tar.gz", hash = "sha256:b1e395b347356860398da42e61c808cf1e34b6fa7180cf2b9d87d986e1a06ba0"},
+    {file = "botocore-1.43.8-py3-none-any.whl", hash = "sha256:6257d2655c3abe75eaa49e218b7d883cdc7cea64652b451e5feb08a6c169da3c"},
+    {file = "botocore-1.43.8.tar.gz", hash = "sha256:611ad8b1f60661373cd39d9391ff16f1eaf8f5cb1d0a691563a4201d1a2603ce"},
 ]
 
 [[package]]
 name = "browserbase"
-version = "1.8.0"
+version = "1.10.0"
 summary = ""
 dependencies = [
     "anyio",
@@ -305,8 +305,8 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "browserbase-1.8.0-py3-none-any.whl", hash = "sha256:4c4215973cc99f2f6d34550ae105c3f1f83b5fe22df2845bea0920b10f809526"},
-    {file = "browserbase-1.8.0.tar.gz", hash = "sha256:dc62910c2f1fab3e944f338af9fbf82f53bbffcb3aeb6382b4e435a752383011"},
+    {file = "browserbase-1.10.0-py3-none-any.whl", hash = "sha256:fa47c28c1c1ebe97f7f2aaabc774a425d8d57c85d7310c92a3cc86629e8aceae"},
+    {file = "browserbase-1.10.0.tar.gz", hash = "sha256:bd155d69fdf37c314ba7fd0fca40315c4a3fcf72e9e4d225e16dd55e0f83fb7e"},
 ]
 
 [[package]]
@@ -493,7 +493,7 @@ files = [
 
 [[package]]
 name = "cyclopts"
-version = "4.11.2"
+version = "4.12.0"
 summary = ""
 dependencies = [
     "attrs",
@@ -502,8 +502,8 @@ dependencies = [
     "rich-rst",
 ]
 files = [
-    {file = "cyclopts-4.11.2-py3-none-any.whl", hash = "sha256:838020120b939549ff7c8423aca29c86764b5dd1d8a5d7f3753a6327861f537b"},
-    {file = "cyclopts-4.11.2.tar.gz", hash = "sha256:8c9b77921660fa1ee52c150e2217ced672323efb3434e9b338077de1bc551ff4"},
+    {file = "cyclopts-4.12.0-py3-none-any.whl", hash = "sha256:ee03d2b9ef790d866cb3823a7e54b2be5252c82d34536579846fce068b30c38f"},
+    {file = "cyclopts-4.12.0.tar.gz", hash = "sha256:86bfb5b35cb078decc1cca6c1be41f9a0e6202dc43b4f6056d5cfc6d1f4a69d1"},
 ]
 
 [[package]]
@@ -553,6 +553,15 @@ dependencies = [
 files = [
     {file = "email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4"},
     {file = "email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426"},
+]
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+summary = ""
+files = [
+    {file = "et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa"},
+    {file = "et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54"},
 ]
 
 [[package]]
@@ -776,7 +785,7 @@ files = [
 
 [[package]]
 name = "google-genai"
-version = "2.0.1"
+version = "2.2.0"
 summary = ""
 dependencies = [
     "anyio",
@@ -791,8 +800,8 @@ dependencies = [
     "websockets",
 ]
 files = [
-    {file = "google_genai-2.0.1-py3-none-any.whl", hash = "sha256:5cb61ff5b8d33129bb7f5df0b5384ed2e71e5dd06ccc012cdbad28b070f6ce99"},
-    {file = "google_genai-2.0.1.tar.gz", hash = "sha256:32cec7c07157c0e65e4dfc740e3288ff8e8bfc2d506cde49f884d79ed8377867"},
+    {file = "google_genai-2.2.0-py3-none-any.whl", hash = "sha256:26b0815fd45fe4ccc07c3fb3a47a808732349a9fb3de74970c3d3ad897de4647"},
+    {file = "google_genai-2.2.0.tar.gz", hash = "sha256:9e50fe798289b600360b523254b9fe5af72bbc1a4fcf7d774f849aa0a9748a9e"},
 ]
 
 [[package]]
@@ -968,11 +977,11 @@ files = [
 
 [[package]]
 name = "idna"
-version = "3.14"
+version = "3.15"
 summary = ""
 files = [
-    {file = "idna-3.14-py3-none-any.whl", hash = "sha256:e677eaf072e290f7b725f9acf0b3a2bd55f9fd6f7c70abe5f0e34823d0accf69"},
-    {file = "idna-3.14.tar.gz", hash = "sha256:466d810d7a2cc1022bea9b037c39728d51ae7dad40d480fc9b7d7ecf98ba8ee3"},
+    {file = "idna-3.15-py3-none-any.whl", hash = "sha256:048adeaf8c2d788c40fee287673ccaa74c24ffd8dcf09ffa555a2fbb59f10ac8"},
+    {file = "idna-3.15.tar.gz", hash = "sha256:ca962446ea538f7092a95e057da437618e886f4d349216d2b1e294abfdb65fdc"},
 ]
 
 [[package]]
@@ -1163,7 +1172,7 @@ files = [
 
 [[package]]
 name = "logfire"
-version = "4.32.1"
+version = "4.33.0"
 summary = ""
 dependencies = [
     "executing",
@@ -1175,31 +1184,31 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "logfire-4.32.1-py3-none-any.whl", hash = "sha256:cb7873efec0e94a3de6e603539daaa6509a454599621c80dd227fbfa0ade37d4"},
-    {file = "logfire-4.32.1.tar.gz", hash = "sha256:8e7ff418b5f2629c8a8e9426283ff82c760a30f24516c4c389d6cbb1d9768c58"},
+    {file = "logfire-4.33.0-py3-none-any.whl", hash = "sha256:eb876a497f2f8cc450005541192ca2e87e0f8781dc20f88b952ab0b141a1ae76"},
+    {file = "logfire-4.33.0.tar.gz", hash = "sha256:1f0ac129b4f76fd4a61763bff5e9fcd75aff99348b89071faa2f54e1213f856a"},
 ]
 
 [[package]]
 name = "logfire-api"
-version = "4.32.1"
+version = "4.33.0"
 summary = ""
 files = [
-    {file = "logfire_api-4.32.1-py3-none-any.whl", hash = "sha256:4b4c27cf6e27e8e26ef4b22a77f2a2988dd1d07e2d24ee70673ef34b234fb8a5"},
-    {file = "logfire_api-4.32.1.tar.gz", hash = "sha256:5e8714b2bb5fb5d1f4a4a833941e4ca711b75d2c1f98e76c5ad680fe6991af6a"},
+    {file = "logfire_api-4.33.0-py3-none-any.whl", hash = "sha256:b992727bab71412b5a00f54453eec18e559232c83d7120cf5c6a9edd33fb0c4e"},
+    {file = "logfire_api-4.33.0.tar.gz", hash = "sha256:0a604f710e803db08a2ddc41e6152bf8d8a56b549f8856cbf82baa36bc7de2c9"},
 ]
 
 [[package]]
 name = "logfire"
-version = "4.32.1"
+version = "4.33.0"
 extras = ["httpx"]
 summary = ""
 dependencies = [
-    "logfire==4.32.1",
+    "logfire==4.33.0",
     "opentelemetry-instrumentation-httpx",
 ]
 files = [
-    {file = "logfire-4.32.1-py3-none-any.whl", hash = "sha256:cb7873efec0e94a3de6e603539daaa6509a454599621c80dd227fbfa0ade37d4"},
-    {file = "logfire-4.32.1.tar.gz", hash = "sha256:8e7ff418b5f2629c8a8e9426283ff82c760a30f24516c4c389d6cbb1d9768c58"},
+    {file = "logfire-4.33.0-py3-none-any.whl", hash = "sha256:eb876a497f2f8cc450005541192ca2e87e0f8781dc20f88b952ab0b141a1ae76"},
+    {file = "logfire-4.33.0.tar.gz", hash = "sha256:1f0ac129b4f76fd4a61763bff5e9fcd75aff99348b89071faa2f54e1213f856a"},
 ]
 
 [[package]]
@@ -1393,6 +1402,18 @@ dependencies = [
 files = [
     {file = "openapi_pydantic-0.5.1-py3-none-any.whl", hash = "sha256:a3a09ef4586f5bd760a8df7f43028b60cafb6d9f61de2acba9574766255ab146"},
     {file = "openapi_pydantic-0.5.1.tar.gz", hash = "sha256:ff6835af6bde7a459fb93eb93bb92b8749b754fc6e51b2f1590a19dc3005ee0d"},
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+summary = ""
+dependencies = [
+    "et-xmlfile",
+]
+files = [
+    {file = "openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2"},
+    {file = "openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050"},
 ]
 
 [[package]]
@@ -2430,7 +2451,7 @@ files = [
 
 [[package]]
 name = "requests"
-version = "2.33.1"
+version = "2.34.2"
 summary = ""
 dependencies = [
     "certifi",
@@ -2439,8 +2460,8 @@ dependencies = [
     "urllib3",
 ]
 files = [
-    {file = "requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a"},
-    {file = "requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517"},
+    {file = "requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"},
+    {file = "requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"},
 ]
 
 [[package]]
@@ -2588,15 +2609,15 @@ files = [
 
 [[package]]
 name = "sse-starlette"
-version = "3.4.2"
+version = "3.4.4"
 summary = ""
 dependencies = [
     "anyio",
     "starlette",
 ]
 files = [
-    {file = "sse_starlette-3.4.2-py3-none-any.whl", hash = "sha256:6ea5d35b7ce979a3de5a0db5f77fe886b1616e4b3e1ad93fba502bd9b5fb662f"},
-    {file = "sse_starlette-3.4.2.tar.gz", hash = "sha256:2f9a7f51ed84395a0427fb9f66cb1ec11f7899d977a72cbc9070b962a2e14489"},
+    {file = "sse_starlette-3.4.4-py3-none-any.whl", hash = "sha256:3f4dd50d8aed2771a091f3a83000323fc3844541c16b4fe585ae2420cc6df973"},
+    {file = "sse_starlette-3.4.4.tar.gz", hash = "sha256:07e0fa0460138baf25cdd5fb28683472c3995dc1642225191b3832d62526bcb0"},
 ]
 
 [[package]]
@@ -2626,7 +2647,7 @@ files = [
 
 [[package]]
 name = "temporalio"
-version = "1.27.0"
+version = "1.27.2"
 summary = ""
 dependencies = [
     "nexus-rpc",
@@ -2635,12 +2656,12 @@ dependencies = [
     "typing-extensions",
 ]
 files = [
-    {file = "temporalio-1.27.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7daa4345b377b74602626326357c49ea1864bf1277fb7cb0b9f659f505c3dfb5"},
-    {file = "temporalio-1.27.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:17bed16eaf340dd48ad59178c3928ecf848674bce31f80529ea057848a29399b"},
-    {file = "temporalio-1.27.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:449c1e4c0d4f4d6545442060b74760f491b67c075ebde6765be16468454e2874"},
-    {file = "temporalio-1.27.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5302035f8c2fdadd69a1362309ea5514bb4129bd4e494e6b69f9a5bb85e8cb85"},
-    {file = "temporalio-1.27.0-cp310-abi3-win_amd64.whl", hash = "sha256:0f125e82ff616dd46fb45ac4d253319e989bf3734a4eb25af703d5bc27147af9"},
-    {file = "temporalio-1.27.0.tar.gz", hash = "sha256:fb92ae1077967ec626375a034af7e7108fe65f7b4ab1d98798ac2eecab247a65"},
+    {file = "temporalio-1.27.2-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:860f706380faafec8f183f9194d0883c8033a4211c5d19c2c962c45b06cf99e9"},
+    {file = "temporalio-1.27.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:a8dc0c680e351f3132809861888d8326dbd5030dd4e570663597e7d4768d9502"},
+    {file = "temporalio-1.27.2-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:805f3de4d193dec52e040e41dbfc9ab44be0206d2e81142ceefaf7b7208058d1"},
+    {file = "temporalio-1.27.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5bc996cb501b8a918f50037ccee6facb05bb70984acada4c2a3e01f5e7957a38"},
+    {file = "temporalio-1.27.2-cp310-abi3-win_amd64.whl", hash = "sha256:62a84ae9a60c17932971e4ca3b0f3cd6f32f173b8183e759989376503fb95af6"},
+    {file = "temporalio-1.27.2.tar.gz", hash = "sha256:633bf2379492f3db1e887d1e64fdac00d9c2ddc3e9382b831d5af68256912e92"},
 ]
 
 [[package]]
@@ -2736,14 +2757,14 @@ files = [
 
 [[package]]
 name = "types-requests"
-version = "2.33.0.20260508"
+version = "2.33.0.20260513"
 summary = ""
 dependencies = [
     "urllib3",
 ]
 files = [
-    {file = "types_requests-2.33.0.20260508-py3-none-any.whl", hash = "sha256:fa01459cca184229713df03709db46a905325906d27e042cd4fd7ea3d15d3400"},
-    {file = "types_requests-2.33.0.20260508.tar.gz", hash = "sha256:81b2ae5f0d20967714a6aa5ef9284c05570d7cb06b7de8f2a77b918b63ddd411"},
+    {file = "types_requests-2.33.0.20260513-py3-none-any.whl", hash = "sha256:d5a965f9d18b6e06b72039a69565de9027e58f36a7f709857da747fbe7521122"},
+    {file = "types_requests-2.33.0.20260513.tar.gz", hash = "sha256:bd845450e954e751373d5d33526742592f298808a3ee3bda7e858e46b839b57f"},
 ]
 
 [[package]]
@@ -2817,15 +2838,15 @@ files = [
 
 [[package]]
 name = "uvicorn"
-version = "0.46.0"
+version = "0.47.0"
 summary = ""
 dependencies = [
     "click",
     "h11",
 ]
 files = [
-    {file = "uvicorn-0.46.0-py3-none-any.whl", hash = "sha256:bbebbcbed972d162afca128605223022bedd345b7bc7855ce66deb31487a9048"},
-    {file = "uvicorn-0.46.0.tar.gz", hash = "sha256:fb9da0926999cc6cb22dc7cd71a94a632f078e6ae47ff683c5c420750fb7413d"},
+    {file = "uvicorn-0.47.0-py3-none-any.whl", hash = "sha256:2c5715bc12d1892d84752049f400cd1c3cb018514967fdfeb97640443a6a9432"},
+    {file = "uvicorn-0.47.0.tar.gz", hash = "sha256:7c9a0ea1a9414106bbab7324609c162d8fa0cdcdcb703060987269d77c7bb533"},
 ]
 
 [[package]]
