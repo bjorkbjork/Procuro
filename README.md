@@ -2,6 +2,8 @@
 
 Autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on B2B platforms (GlobalSources, Alibaba), negotiates FOB prices via email, and logs results to Google Sheets.
 
+![Architecture](images/Architecture.png)
+
 ## Exploring the Architecture
 
 For a detailed walkthrough of the architecture, pipeline stages, and complexity hotspots, see [`docs/ONBOARDING.md`](docs/ONBOARDING.md).
