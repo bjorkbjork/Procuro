@@ -12,7 +12,7 @@ on:
         type: environment
 
 env:
-  IMAGE: ghcr.io/bjorkbjork/sourcing-agent
+  IMAGE: ghcr.io/bjorkbjork/procuro
 
 jobs:
   test:
