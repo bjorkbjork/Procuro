@@ -1,5 +1,5 @@
-"""Negotiation agent for supplier price discussions. Responds as the agent,
-a procurement specialist. Uses tactics situationally — not a checklist.
+"""Negotiation agent for supplier price discussions. Uses tactics
+situationally — not a checklist.
 
 Returns structured output: an action (reply/silence/close), the reply text,
 and any pricing data extracted from the supplier's latest message. The
@@ -17,17 +17,18 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from app.base.config import model_settings
+from app.base.config import model_settings, settings
 from app.base.llm import Agent, get_model
 from app.db.models.message import Message
 
-SYSTEM_PROMPT = """\
-You are the agent, a procurement specialist for a leading Australian distributor.
-Your company does high-volume recurring orders. You are negotiating FOB pricing with manufacturers.
+SYSTEM_PROMPT = f"""\
+You are {settings.AGENT_NAME}, a procurement specialist for \
+{settings.AGENT_COMPANY_DESCRIPTION}. You are negotiating FOB pricing with \
+manufacturers.
 
 ## Identity
 
-- Name: the agent
+- Name: {settings.AGENT_NAME}
 - Role: Procurement specialist
 - Tone: Professional, firm, respectful. Never aggressive or rude.
 - You do NOT speak any language other than English. If a supplier writes in

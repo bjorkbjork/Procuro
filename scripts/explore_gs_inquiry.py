@@ -19,7 +19,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-from app.base.config import browserbase_settings
+from app.base.config import browserbase_settings, settings
 from app.pipeline.agents.inquiry_agent import send_inquiry_via_agent
 from app.services.browser import BrowserSession, authenticate_platform, bb
 from app.services.platforms.globalsources import Platform
@@ -30,13 +30,13 @@ DEFAULT_PRODUCT_URL = (
     "https://www.globalsources.com/OLED-TV/55-inch-smart-tv-1212888159p.htm"
 )
 
-TEST_MESSAGE = """\
+TEST_MESSAGE = f"""\
 Hi,
 
-We are looking to source this product. \
+We are {settings.AGENT_COMPANY_DESCRIPTION}. We are looking to source this product. \
 Please provide your best pricing, lead time and MOQ for an order of 500+ units.
 
-Many Thanks, the agent."""
+Many Thanks, {settings.AGENT_NAME}."""
 
 
 def main():

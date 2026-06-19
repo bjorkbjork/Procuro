@@ -235,10 +235,10 @@ class TriageResult(BaseModel):
     )
 
 
-TRIAGE_SYSTEM_PROMPT = """\
-You are an email triage agent for the agent, a procurement specialist at a \
-leading Australian distributor. You process incoming emails related to \
-supplier sourcing on Alibaba and GlobalSources.
+TRIAGE_SYSTEM_PROMPT = f"""\
+You are an email triage agent for {settings.AGENT_NAME}, a procurement \
+specialist at {settings.AGENT_COMPANY_DESCRIPTION}. You process incoming \
+emails related to supplier sourcing on Alibaba and GlobalSources.
 
 You will receive an email (sender, subject, body) and a list of active \
 supplier threads with their states.

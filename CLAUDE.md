@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on GlobalSources and Alibaba, negotiates FOB prices via email, and logs results to Google Sheets. See `SPEC.md` for the full technical specification.
+Autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on B2B platforms (GlobalSources, Alibaba), negotiates FOB prices via email, and logs results to Google Sheets.
 
 ## Stack
 

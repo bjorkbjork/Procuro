@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-An autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on GlobalSources and Alibaba, negotiates FOB prices via email, and logs results to Google Sheets.
+An autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on B2B platforms (GlobalSources, Alibaba), negotiates FOB prices via email, and logs results to Google Sheets.
 
 | | |
 |---|---|
@@ -53,6 +53,7 @@ External service integrations — browser automation, Gmail, Sheets, OAuth, CAPT
 | `app/services/platforms/alibaba/` | Alibaba adapter — internal JSON API search, Playwright login/inquiry, messaging |
 | `app/services/platforms/globalsources/` | GlobalSources adapter — API search, Google SSO login, inquiry, spec parsing |
 | `app/services/sources/kogan/` | Kogan product page parser (BeautifulSoup) |
+| `app/services/sources/kmart/` | Kmart AU product page parser (BeautifulSoup) |
 
 ### 4. Pipeline Layer
 
@@ -113,7 +114,7 @@ Standalone scripts in `scripts/` for manual pipeline execution (`run_pipeline.py
 Follow this path to understand the codebase end-to-end:
 
 ### Step 1: Project Overview
-Read `README.md` and `SPEC.md` to understand the project's purpose and the full 6-stage pipeline architecture.
+Read `README.md` to understand the project's purpose and the full 6-stage pipeline architecture.
 
 ### Step 2: Application Entry Point
 `app/main.py` orchestrates everything — registers APScheduler cron jobs, chains stages 1–3 (sourcing pipeline) and 4–6 (negotiation pipeline). `ThreadPoolExecutor` provides fan-out concurrency with a reentrant lock preventing overlapping runs.
@@ -125,7 +126,7 @@ Read `README.md` and `SPEC.md` to understand the project's purpose and the full 
 Understand the data model: `SourceProduct` → `SupplierProduct` → `SupplierThread` (state machine) → `Quote` + `Message`. These track the full sourcing lifecycle from product spec to final negotiated price.
 
 ### Step 5: Stage 1 — Spec Extraction
-`s1_spec_extraction.py` fetches Kogan product pages via Browserbase, parses with BeautifulSoup, and upserts `SourceProduct` records. The `MarketplaceSource` protocol makes adding new sources straightforward.
+`s1_spec_extraction.py` fetches retailer product pages via Browserbase, parses with BeautifulSoup, and upserts `SourceProduct` records. The `MarketplaceSource` protocol makes adding new retailer sources straightforward.
 
 ### Step 6: Stage 2 — Supplier Search
 The most complex stage. LLM-generated queries → platform search → concurrent spec fetching → manufacturer filtering → LLM-based matching. Multi-round cycles until match thresholds or candidate limits are reached.
