@@ -29,23 +29,25 @@ log = logging.getLogger(__name__)
 OUTREACH_TEMPLATE = """\
 Hi,
 
-We are looking to source the following product:
+We are {company_description}. We are looking to source the following product:
 
-{spec_block}
+{{spec_block}}
 
-\
 We are looking to form long term relationships for consistent orders. Please provide \
 your best pricing, lead time and MOQ.
 
 The product we are looking for is to have the specification above and essentially be \
-the same as this product: {source_url}
+the same as this product: {{source_url}}
 
 Please only respond if you are able to meet these requirements. Our order quantities \
 are typically very large and frequent throughout the year.
 
-For further correspondence, please contact us directly via email at {email}.
+For further correspondence, please contact us directly via email at {{email}}.
 
-Many Thanks, the agent."""
+Many Thanks, {agent_name}.""".format(
+    company_description=settings.AGENT_COMPANY_DESCRIPTION,
+    agent_name=settings.AGENT_NAME,
+)
 
 
 def _format_spec_block(specs: dict) -> str:

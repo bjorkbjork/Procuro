@@ -431,7 +431,7 @@ def _get_supplier_email(gmail: GmailService, gmail_thread_id: str) -> str | None
     thread_data = gmail.get_thread(gmail_thread_id)
     for msg in reversed(thread_data.get("messages", [])):
         _, sender_email = _extract_sender(msg)
-        if sender_email and "sourcing_agent" not in sender_email:
+        if sender_email and sender_email != settings.GMAIL_ACCOUNT:
             return sender_email
     return None
 

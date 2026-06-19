@@ -12,22 +12,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     model_config = {"env_file": ".env", "extra": "ignore"}
 
-    GMAIL_ACCOUNT: str = "sourcing.agent@example.com"
-    GMAIL_PASSWORD: str
-
-    # AWS Bedrock
-    BEDROCK_REGION: str = "ap-southeast-2"
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-
-    # Logfire
-    LOGFIRE_TOKEN: str = ""
-    MAINTAINER_EMAIL_ADDRESS: str = ""
-    MAX_WORKERS: int = 3
-    GOOGLE_TOTP_SECRET: str = ""
-    MIN_MATCHES_PER_PRODUCT: int = 10
-    MAX_CANDIDATES_PER_PRODUCT: int = 200
-    AUTOMATION_FAILURE_ALERT_THRESHOLD: float = 0.5
+    AGENT_NAME: str
+    AGENT_EMAIL: str
+    AGENT_COMPANY_DESCRIPTION: str = (
+        "over high-volume recurring orders.5
     AUTOMATION_FAILURE_ALERT_WINDOW_MINUTES: int = 30
     AUTOMATION_FAILURE_ALERT_MIN_EVENTS: int = 5
     REAUTH_MAX_RETRIES: int = 5
@@ -57,8 +45,7 @@ class GoogleSettings(BaseSettings):
     )
     GOOGLE_REFRESH_TOKEN: str = ""
 
-    # the ID for the sheet containing both input/output tabs
-    GOOGLE_SHEET_ID: str = "1-3f1S0ditHC70fawiS6tcw2yK7GCWacecKCGXNTl3s4"
+    GOOGLE_SHEET_ID: str
 
 
 class BrowserbaseSettings(BaseSettings):

@@ -22,7 +22,7 @@ import argparse
 import logging
 import sys
 
-from app.base.config import configure_logging
+from app.base.config import configure_logging, settings
 
 configure_logging()
 log = logging.getLogger("pipeline")
@@ -464,10 +464,10 @@ def cmd_test_outreach(args):
 
     platform = Platform()
     message = (
-        "Hi, we are a leading Australian distributor interested in this product. "
+        f"Hi, we are {settings.AGENT_COMPANY_DESCRIPTION} interested in this product. "
         "Could you please provide your best FOB pricing, MOQ, and lead time? "
         "For further correspondence please contact us at "
-        f"{args.email or 'sourcing.agent@example.com'}. Thanks, the agent."
+        f"{args.email or settings.GMAIL_ACCOUNT}. Thanks, {settings.AGENT_NAME}."
     )
 
     log.info("Authenticating on Alibaba...")
@@ -554,8 +554,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run pipeline stages incrementally")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    s1 = sub.add_parser("stage1", help="Extract specs from a Kogan URL")
-    s1.add_argument("url", help="Kogan product URL")
+    s1 = sub.add_parser("stage1", help="Extract specs from a retailer URL")
+    s1.add_argument("url", help="Retailer product URL")
     s1.set_defaults(func=cmd_stage1)
 
     s2 = sub.add_parser("stage2", help="Full supplier search + match")

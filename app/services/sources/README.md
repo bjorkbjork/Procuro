@@ -1,6 +1,6 @@
 # Source Marketplaces
 
-Each subdirectory is a source marketplace (Kogan, etc.) — the retailer whose products we're trying to find suppliers for. Sources are auto-discovered at runtime — no manual registration needed.
+Each subdirectory is a retailer source (Kogan, Kmart, etc.) — the retailer whose products we're trying to find suppliers for. Sources are auto-discovered at runtime — no manual registration needed.
 
 ## Adding a new source
 

@@ -12,6 +12,7 @@ from app.db.models.source_product import SourceProduct
 from app.db.models.supplier import Supplier
 from app.db.models.supplier_product import SupplierProduct
 from app.db.models.supplier_thread import SupplierThread
+from app.base.config import settings
 from app.pipeline.stages.s3_outreach import (
     _build_message,
     _format_spec_block,
@@ -100,12 +101,12 @@ class TestBuildMessage:
         msg = _build_message(source_product)
         assert "QLED" in msg
         assert TEST_URL in msg
-        assert "the agent" in msg
+        assert settings.AGENT_NAME in msg
 
     def test_includes_email(self, source_product):
         msg = _build_message(source_product)
         assert "email" in msg.lower()
-        assert "@" in msg
+        assert settings.GMAIL_ACCOUNT in msg
 
 
 class TestSendOutreach:

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-An autonomous agent that sources supplier quotes for Kogan products from GlobalSources and Alibaba, negotiates FOB prices via email, and logs results to Google Sheets.
+An autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on B2B platforms (GlobalSources, Alibaba), negotiates FOB prices via email, and logs results to Google Sheets.
 
 | | |
 |---|---|
@@ -31,7 +31,7 @@ SQLAlchemy ORM models for the full sourcing lifecycle, plus Postgres session man
 
 | Model | Role |
 |---|---|
-| `SourceProduct` | Kogan product specs extracted in stage 1 |
+| `SourceProduct` | Retailer product specs extracted in stage 1 |
 | `SupplierProduct` | Discovered supplier listings with LLM match scoring |
 | `SupplierThread` | Central state machine (NEW → OUTREACH_SENT → AWAITING_REPLY → NEGOTIATING → FINAL_PRICE_LOGGED) |
 | `Quote` | Recorded supplier price quotes (FOB, MOQ, lead time, currency) |
@@ -53,6 +53,7 @@ External service integrations — browser automation, Gmail, Sheets, OAuth, CAPT
 | `app/services/platforms/alibaba/` | Alibaba adapter — internal JSON API search, Playwright login/inquiry, messaging |
 | `app/services/platforms/globalsources/` | GlobalSources adapter — API search, Google SSO login, inquiry, spec parsing |
 | `app/services/sources/kogan/` | Kogan product page parser (BeautifulSoup) |
+| `app/services/sources/kmart/` | Kmart AU product page parser (BeautifulSoup) |
 
 ### 4. Pipeline Layer
 
@@ -60,7 +61,7 @@ Six-stage sourcing pipeline with PydanticAI agents for LLM-driven decisions.
 
 | Stage | File | What it does |
 |---|---|---|
-| S1 — Spec Extraction | `s1_spec_extraction.py` | Fetches Kogan pages via Browserbase, parses titles/specs, upserts SourceProduct |
+| S1 — Spec Extraction | `s1_spec_extraction.py` | Fetches retailer pages via Browserbase, parses titles/specs, upserts SourceProduct |
 | S2 — Supplier Search | `s2_supplier_search.py` | LLM-generated queries → platform search → spec fetch → manufacturer filter → LLM matching |
 | S3 — Outreach | `s3_outreach.py` | Sends inquiry messages via browser automation with deterministic-then-agent fallback |
 | S4 — Inbox Triage | `s4_inbox_triage.py` | Polls Gmail + platform messages, classifies via LLM triage, fuzzy-matches to threads |
@@ -101,7 +102,7 @@ Standalone scripts in `scripts/` for manual pipeline execution (`run_pipeline.py
 - **Browser Fallback Executor** — Two-tier pattern used across stages: try deterministic Playwright automation first, fall back to an LLM agent if page structure has changed (`app/pipeline/browser_executor.py`).
 - **RotatingModel** — Custom PydanticAI Model that wraps multiple BedrockConverseModel instances with sliding-window RPM tracking and automatic load balancing.
 - **SupplierPlatform Protocol** — Contract that Alibaba and GlobalSources implementations satisfy (search, parse, login, inquiry, messaging). Platforms are auto-discovered at runtime via `pkgutil`.
-- **MarketplaceSource Protocol** — Abstraction for product sources (currently Kogan), making it easy to add new product sources.
+- **MarketplaceSource Protocol** — Abstraction for product sources (Kogan, Kmart, etc.), making it easy to add new retailers.
 - **State Machine** — `SupplierThread` drives the lifecycle: NEW → OUTREACH_SENT → AWAITING_REPLY → NEGOTIATING → FINAL_PRICE_LOGGED (plus `unprocessable` for dead ends).
 - **No async** — Concurrency is handled via `ThreadPoolExecutor` and APScheduler, not async/await.
 - **All browser sessions are cloud** — Everything runs through Browserbase, never local Playwright.
@@ -113,7 +114,7 @@ Standalone scripts in `scripts/` for manual pipeline execution (`run_pipeline.py
 Follow this path to understand the codebase end-to-end:
 
 ### Step 1: Project Overview
-Read `README.md` and `SPEC.md` to understand the project's purpose and the full 6-stage pipeline architecture.
+Read `README.md` to understand the project's purpose and the full 6-stage pipeline architecture.
 
 ### Step 2: Application Entry Point
 `app/main.py` orchestrates everything — registers APScheduler cron jobs, chains stages 1–3 (sourcing pipeline) and 4–6 (negotiation pipeline). `ThreadPoolExecutor` provides fan-out concurrency with a reentrant lock preventing overlapping runs.
@@ -125,7 +126,7 @@ Read `README.md` and `SPEC.md` to understand the project's purpose and the full 
 Understand the data model: `SourceProduct` → `SupplierProduct` → `SupplierThread` (state machine) → `Quote` + `Message`. These track the full sourcing lifecycle from product spec to final negotiated price.
 
 ### Step 5: Stage 1 — Spec Extraction
-`s1_spec_extraction.py` fetches Kogan product pages via Browserbase, parses with BeautifulSoup, and upserts `SourceProduct` records. The `MarketplaceSource` protocol makes adding new sources straightforward.
+`s1_spec_extraction.py` fetches retailer product pages via Browserbase, parses with BeautifulSoup, and upserts `SourceProduct` records. The `MarketplaceSource` protocol makes adding new retailer sources straightforward.
 
 ### Step 6: Stage 2 — Supplier Search
 The most complex stage. LLM-generated queries → platform search → concurrent spec fetching → manufacturer filtering → LLM-based matching. Multi-round cycles until match thresholds or candidate limits are reached.

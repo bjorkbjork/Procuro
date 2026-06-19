@@ -1,8 +1,6 @@
 # Supplier Sourcing Agent
 
-Autonomous agent that sources supplier quotes for Kogan products from GlobalSources and Alibaba, negotiates FOB prices via email, and logs results to Google Sheets.
-
-See `SPEC.md` for the full technical specification.
+Autonomous agent that scrapes product specs from retailer websites (Kogan, Kmart, etc.), finds matching suppliers on B2B platforms (GlobalSources, Alibaba), negotiates FOB prices via email, and logs results to Google Sheets.
 
 ## Exploring the Architecture
 
@@ -110,6 +108,8 @@ Add these required secrets to the same environment. See `app/base/config.py` for
 
 | Secret | Description |
 |---|---|
+| `AGENT_NAME` | Procurement persona name (e.g. "Alex Chen") |
+| `AGENT_EMAIL` | Procurement persona email address |
 | `GMAIL_PASSWORD` | Gmail app password |
 | `AWS_ACCESS_KEY_ID` | AWS IAM credentials for Bedrock |
 | `AWS_SECRET_ACCESS_KEY` | AWS IAM credentials for Bedrock |
@@ -124,7 +124,7 @@ Add these required secrets to the same environment. See `app/base/config.py` for
 
 | Secret | Default | Description |
 |---|---|---|
-| `GMAIL_ACCOUNT` | `sourcing.agent@example.com` | Agent's Gmail address |
+| `GMAIL_ACCOUNT` | *(required)* | Agent's Gmail address |
 | `BEDROCK_REGION` | `ap-southeast-2` | AWS Bedrock region |
 | `GOOGLE_REFRESH_TOKEN` | | Stored in Postgres after first OAuth flow |
 | `GOOGLE_SHEET_ID` | *(set in config)* | Input/output spreadsheet ID |

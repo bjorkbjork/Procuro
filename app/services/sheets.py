@@ -39,7 +39,7 @@ MATCH_RESULTS_COLUMNS = {
 }
 
 MATCH_RESULTS_HEADERS = [
-    "Kogan Product",
+    "Source Product",
     "Supplier Product",
     "Supplier",
     "Platform",
@@ -65,7 +65,7 @@ ACTIVE_THREADS_TAB = "Active Threads"
 ACTIVE_THREADS_HEADERS = [
     "Thread ID",
     "Product",
-    "Kogan URL",
+    "Source URL",
     "Supplier",
     "Platform",
     "Channel",
@@ -84,7 +84,7 @@ ACTIVE_THREADS_HEADERS = [
 PRODUCTS_PIPELINE_TAB = "Products Pipeline"
 PRODUCTS_PIPELINE_HEADERS = [
     "Product",
-    "Kogan URL",
+    "Source URL",
     "Candidates Found",
     "Matched",
     "Rejected",
