@@ -14,8 +14,24 @@ class Settings(BaseSettings):
 
     AGENT_NAME: str
     AGENT_EMAIL: str
-    AGENT_COMPANY_DESCRIPTION: str = (
-        "over high-volume recurring orders.5
+    AGENT_COMPANY_DESCRIPTION: str
+
+    GMAIL_ACCOUNT: str
+    GMAIL_PASSWORD: str
+
+    # AWS Bedrock
+    BEDROCK_REGION: str = "ap-southeast-2"
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+
+    # Logfire
+    LOGFIRE_TOKEN: str = ""
+    MAINTAINER_EMAIL_ADDRESS: str = ""
+    MAX_WORKERS: int = 3
+    GOOGLE_TOTP_SECRET: str = ""
+    MIN_MATCHES_PER_PRODUCT: int = 10
+    MAX_CANDIDATES_PER_PRODUCT: int = 200
+    AUTOMATION_FAILURE_ALERT_THRESHOLD: float = 0.5
     AUTOMATION_FAILURE_ALERT_WINDOW_MINUTES: int = 30
     AUTOMATION_FAILURE_ALERT_MIN_EVENTS: int = 5
     REAUTH_MAX_RETRIES: int = 5
